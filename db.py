@@ -67,6 +67,10 @@ class _PGConn:
         cols = [d[0] for d in self._cur.description]
         return [dict(zip(cols, r)) for r in rows]
 
+    def cursor(self):
+        """Return self — allows code that calls conn.cursor() to work transparently."""
+        return self
+
     def commit(self):
         self._conn.commit()
 
