@@ -32,6 +32,10 @@ app = Flask(__name__)
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 CORS(app)  # Allow all origins — endpoints are secured via Telegram initData validation
 
+# Initialise DB tables on startup (works with both gunicorn and direct run)
+with app.app_context():
+    db.init_db()
+
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 
