@@ -30,11 +30,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
-CORS(app, origins=[
-    "https://classy-chaja-7120c1.netlify.app",
-    "https://*.telegram.org",
-    "http://localhost:5173",   # local dev
-])
+CORS(app)  # Allow all origins — endpoints are secured via Telegram initData validation
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
