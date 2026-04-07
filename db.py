@@ -98,11 +98,10 @@ def _ph() -> str:
 
 
 def _execute(conn, sql: str, params: tuple = ()):
-    """Execute a single statement and return the cursor."""
+    """Execute a single statement and return a cursor-like object with fetchone/fetchall."""
     if _USE_POSTGRES:
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        return cur
+        # _PGConn wraps its own cursor; .execute() returns self (has fetchone/fetchall)
+        return conn.execute(sql, params)
     else:
         return conn.execute(sql, params)
 
