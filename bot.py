@@ -38,10 +38,14 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    ConversationHandler,
     MessageHandler,
     PreCheckoutQueryHandler,
     filters,
 )
+
+# ConversationHandler states
+WAITING_CAPTION = 1
 
 import db
 
@@ -137,22 +141,32 @@ async def _send_media(context: ContextTypes.DEFAULT_TYPE, chat_id, file_url: str
         await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
 
-async def _post_free(context: ContextTypes.DEFAULT_TYPE, row) -> None:
+async def _post_free(
+    context: ContextTypes.DEFAULT_TYPE,
+    row,
+    caption_override: str | None = None,
+) -> None:
     """Post free content directly to the channel.
 
     Args:
         context: PTB context.
         row: content DB row.
+        caption_override: If provided, use this instead of row['caption'].
     """
+    caption = caption_override if caption_override is not None else (row["caption"] or "")
     await _send_media(
         context, CHANNEL_ID,
         file_url=row["file_url"],
         file_type=row["file_type"],
-        caption=row["caption"] or "",
+        caption=caption,
     )
 
 
-async def _post_ppv_teaser(context: ContextTypes.DEFAULT_TYPE, row) -> None:
+async def _post_ppv_teaser(
+    context: ContextTypes.DEFAULT_TYPE,
+    row,
+    caption_override: str | None = None,
+) -> None:
     """Post the teaser media to the channel with an Unlock button.
 
     The teaser is row['teaser_url'] if set, otherwise row['file_url'].
@@ -162,10 +176,11 @@ async def _post_ppv_teaser(context: ContextTypes.DEFAULT_TYPE, row) -> None:
     Args:
         context: PTB context.
         row: content DB row (must have is_ppv=1).
+        caption_override: If provided, use this instead of row['caption'].
     """
     content_id  = row["id"]
     price_stars = row["ppv_price_stars"]
-    caption     = row["caption"] or ""
+    caption     = caption_override if caption_override is not None else (row["caption"] or "")
     teaser_url  = row["teaser_url"] or row["file_url"]
     file_type   = row["file_type"]
 
@@ -195,8 +210,11 @@ async def _post_ppv_teaser(context: ContextTypes.DEFAULT_TYPE, row) -> None:
 # Command handlers
 # ---------------------------------------------------------------------------
 
-async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /post <content_id> — post a free content item to the channel.
+async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /post <content_id> [caption] — post a free content item to the channel.
+
+    If caption text is included in the command it is used immediately.
+    If omitted, the bot asks for a caption (or /skip to post without one).
 
     Args:
         update: Incoming Telegram update.
@@ -204,38 +222,128 @@ async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     if not _is_owner(update):
         await update.message.reply_text("Not authorised.")
-        return
+        return ConversationHandler.END
 
     if not context.args:
-        await update.message.reply_text("Usage: /post <content_id>")
-        return
+        await update.message.reply_text("Usage: /post <content_id> [caption]")
+        return ConversationHandler.END
 
     try:
         content_id = int(context.args[0])
     except ValueError:
         await update.message.reply_text("content_id must be an integer.")
-        return
+        return ConversationHandler.END
 
     rate_err = _check_rate_limit()
     if rate_err:
         await update.message.reply_text(rate_err)
-        return
+        return ConversationHandler.END
 
     row = db.get_content(content_id)
     if row is None:
         await update.message.reply_text(f"Content {content_id} not found.")
-        return
+        return ConversationHandler.END
 
-    if row["is_ppv"]:
-        await _post_ppv_teaser(context, row)
+    # If caption provided inline, post immediately
+    if len(context.args) > 1:
+        caption = " ".join(context.args[1:])
+        await _do_post(context, row, content_id, caption)
+        await update.message.reply_text(f"✅ Posted content {content_id}.")
+        return ConversationHandler.END
+
+    # Otherwise ask for a caption
+    context.user_data["pending_post_id"] = content_id
+    context.user_data["pending_post_type"] = "free"
+    await update.message.reply_text(
+        f"📝 Add a caption for content {content_id}?\n\n"
+        f"Type it now, or send /skip to post without one."
+    )
+    return WAITING_CAPTION
+
+
+async def received_caption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Receive caption text and post the pending content item.
+
+    Args:
+        update: Message containing the caption.
+        context: PTB context with user_data.
+    """
+    caption = update.message.text.strip()
+    content_id = context.user_data.get("pending_post_id")
+    post_type  = context.user_data.get("pending_post_type", "free")
+
+    if content_id is None:
+        await update.message.reply_text("No pending post. Use /post <id> first.")
+        return ConversationHandler.END
+
+    row = db.get_content(content_id)
+    if row is None:
+        await update.message.reply_text(f"Content {content_id} not found.")
+        return ConversationHandler.END
+
+    if post_type == "ppv":
+        stars = context.user_data.get("pending_ppv_stars", 50)
+        db.set_ppv(content_id, stars)
+        row = db.get_content(content_id)   # refresh after update
+        await _post_ppv_teaser(context, row, caption_override=caption)
     else:
-        await _post_free(context, row)
+        await _do_post(context, row, content_id, caption)
 
     db.mark_posted(content_id)
-    await update.message.reply_text(f"Posted content {content_id}.")
+    context.user_data.clear()
+    await update.message.reply_text(f"✅ Posted content {content_id}.")
+    return ConversationHandler.END
 
 
-async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def skip_caption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Post the pending content item with no caption.
+
+    Args:
+        update: /skip command.
+        context: PTB context with user_data.
+    """
+    content_id = context.user_data.get("pending_post_id")
+    post_type  = context.user_data.get("pending_post_type", "free")
+
+    if content_id is None:
+        await update.message.reply_text("No pending post.")
+        return ConversationHandler.END
+
+    row = db.get_content(content_id)
+    if row is None:
+        await update.message.reply_text(f"Content {content_id} not found.")
+        return ConversationHandler.END
+
+    if post_type == "ppv":
+        stars = context.user_data.get("pending_ppv_stars", 50)
+        db.set_ppv(content_id, stars)
+        row = db.get_content(content_id)
+        await _post_ppv_teaser(context, row, caption_override="")
+    else:
+        await _do_post(context, row, content_id, "")
+
+    db.mark_posted(content_id)
+    context.user_data.clear()
+    await update.message.reply_text(f"✅ Posted content {content_id} (no caption).")
+    return ConversationHandler.END
+
+
+async def _do_post(context, row: dict, content_id: int, caption: str) -> None:
+    """Post a free content item to the channel with the given caption.
+
+    Args:
+        context: PTB context.
+        row: Content DB row dict.
+        content_id: ID for logging.
+        caption: Caption string (may be empty).
+    """
+    if row["is_ppv"]:
+        await _post_ppv_teaser(context, row, caption_override=caption)
+    else:
+        await _post_free(context, row, caption_override=caption)
+
+
+async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle /ppv <content_id> <stars> [teaser_content_id].
 
     Marks content as PPV and posts a teaser to the channel.
@@ -250,7 +358,7 @@ async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     if not _is_owner(update):
         await update.message.reply_text("Not authorised.")
-        return
+        return ConversationHandler.END
 
     if len(context.args) < 2:
         await update.message.reply_text(
@@ -258,7 +366,7 @@ async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "teaser_content_id is optional — it's another content item whose "
             "URL is shown free in the channel as a preview."
         )
-        return
+        return ConversationHandler.END
 
     try:
         content_id  = int(context.args[0])
@@ -266,21 +374,21 @@ async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         teaser_id   = int(context.args[2]) if len(context.args) >= 3 else None
     except ValueError:
         await update.message.reply_text("Arguments must be integers.")
-        return
+        return ConversationHandler.END
 
     if price_stars < 1:
         await update.message.reply_text("Stars price must be at least 1.")
-        return
+        return ConversationHandler.END
 
     rate_err = _check_rate_limit()
     if rate_err:
         await update.message.reply_text(rate_err)
-        return
+        return ConversationHandler.END
 
     row = db.get_content(content_id)
     if row is None:
         await update.message.reply_text(f"Content {content_id} not found.")
-        return
+        return ConversationHandler.END
 
     # Resolve teaser URL
     teaser_url = ""
@@ -288,17 +396,20 @@ async def cmd_ppv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         teaser_row = db.get_content(teaser_id)
         if teaser_row is None:
             await update.message.reply_text(f"Teaser content {teaser_id} not found.")
-            return
+            return ConversationHandler.END
         teaser_url = teaser_row["file_url"]
 
     db.set_ppv(content_id, price_stars, teaser_url)
-    row = db.get_content(content_id)   # re-fetch with updated values
 
-    await _post_ppv_teaser(context, row)
-    db.mark_posted(content_id)
+    # Store pending PPV details and ask for caption
+    context.user_data["pending_post_id"]    = content_id
+    context.user_data["pending_post_type"]  = "ppv"
+    context.user_data["pending_ppv_stars"]  = price_stars
     await update.message.reply_text(
-        f"PPV teaser posted for content {content_id} ({price_stars} Stars)."
+        f"📝 Add a caption for PPV content {content_id} ({price_stars} Stars)?\n\n"
+        f"Type it now, or send /skip to post without one."
     )
+    return WAITING_CAPTION
 
 
 async def cmd_promo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -523,8 +634,24 @@ def build_app() -> Application:
     """
     app = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("post",     cmd_post))
-    app.add_handler(CommandHandler("ppv",      cmd_ppv))
+    # /post and /ppv use a conversation to optionally collect a caption
+    caption_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("post", cmd_post),
+            CommandHandler("ppv",  cmd_ppv),
+        ],
+        states={
+            WAITING_CAPTION: [
+                CommandHandler("skip", skip_caption),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, received_caption),
+            ],
+        },
+        fallbacks=[CommandHandler("skip", skip_caption)],
+        per_user=True,
+        per_chat=True,
+    )
+    app.add_handler(caption_conv)
+
     app.add_handler(CommandHandler("promo",    cmd_promo))
     app.add_handler(CommandHandler("schedule", cmd_schedule))
 
