@@ -19,6 +19,7 @@ import urllib.parse
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, abort
+from flask_cors import CORS
 
 import db
 
@@ -29,6 +30,11 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
+CORS(app, origins=[
+    "https://classy-chaja-7120c1.netlify.app",
+    "https://*.telegram.org",
+    "http://localhost:5173",   # local dev
+])
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
