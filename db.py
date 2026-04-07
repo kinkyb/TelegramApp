@@ -29,17 +29,60 @@ _USE_POSTGRES = DATABASE_URL.startswith("postgresql://")
 # Connection factory
 # ---------------------------------------------------------------------------
 
+class _PGConn:
+    """Wrapper around pg8000 that makes rows behave like dicts."""
+
+    def __init__(self):
+        import pg8000.dbapi
+        import urllib.parse as _up
+        r = _up.urlparse(DATABASE_URL)
+        self._conn = pg8000.dbapi.connect(
+            user=r.username,
+            password=r.password,
+            host=r.hostname,
+            port=r.port or 5432,
+            database=r.path.lstrip("/"),
+            ssl_context=True,
+        )
+        self._cur = self._conn.cursor()
+
+    def execute(self, sql: str, params: tuple = ()):
+        """Run a query and return self for chaining."""
+        self._cur.execute(sql, params)
+        return self
+
+    def fetchone(self):
+        """Return one row as a dict, or None."""
+        row = self._cur.fetchone()
+        if row is None:
+            return None
+        cols = [d[0] for d in self._cur.description]
+        return dict(zip(cols, row))
+
+    def fetchall(self):
+        """Return all rows as a list of dicts."""
+        rows = self._cur.fetchall()
+        if not rows:
+            return []
+        cols = [d[0] for d in self._cur.description]
+        return [dict(zip(cols, r)) for r in rows]
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._cur.close()
+        self._conn.close()
+
+
 def get_connection():
     """Return an open database connection for the configured backend.
 
     SQLite connections have row_factory set so rows behave like dicts.
-    PostgreSQL connections use RealDictCursor for the same behaviour.
+    PostgreSQL connections use pg8000 (pure Python) with dict-like rows.
     """
     if _USE_POSTGRES:
-        import psycopg2
-        import psycopg2.extras
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-        return conn
+        return _PGConn()
     else:
         path = DATABASE_URL[len("sqlite:///"):]
         conn = sqlite3.connect(path)

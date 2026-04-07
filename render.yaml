@@ -9,7 +9,6 @@ services:
     name: telegram-mini-app-api
     runtime: python
     plan: free
-    pythonVersion: "3.12.0"
     buildCommand: pip install -r requirements.txt && chmod +x start.sh
     startCommand: ./start.sh
     envVars:
@@ -37,3 +36,5 @@ services:
         sync: false
       - key: R2_PUBLIC_URL
         sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.0"
