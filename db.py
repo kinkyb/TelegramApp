@@ -137,16 +137,18 @@ CREATE TABLE IF NOT EXISTS content (
   ppv_price_stars INTEGER,
   posted          BOOLEAN DEFAULT 0,
   posted_at       DATETIME,
-  uploaded_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+  uploaded_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  source_path     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS creators (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  name          TEXT    NOT NULL,
-  onlyfans_url  TEXT    NOT NULL,
-  gif_url       TEXT,
-  bio           TEXT,
-  active        BOOLEAN DEFAULT 1
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  name              TEXT    NOT NULL,
+  onlyfans_url      TEXT    NOT NULL,
+  gif_url           TEXT,
+  bio               TEXT,
+  active            BOOLEAN DEFAULT 1,
+  last_promoted_at  DATETIME
 );
 
 CREATE TABLE IF NOT EXISTS purchases (
@@ -165,6 +167,11 @@ CREATE TABLE IF NOT EXISTS promo_posts (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   posted_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS config (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
 """
 
 _PG_SCHEMA_STATEMENTS = [
@@ -178,15 +185,17 @@ _PG_SCHEMA_STATEMENTS = [
         ppv_price_stars INTEGER,
         posted          BOOLEAN DEFAULT FALSE,
         posted_at       TIMESTAMP,
-        uploaded_at     TIMESTAMP DEFAULT NOW()
+        uploaded_at     TIMESTAMP DEFAULT NOW(),
+        source_path     TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS creators (
-        id            SERIAL PRIMARY KEY,
-        name          TEXT    NOT NULL,
-        onlyfans_url  TEXT    NOT NULL,
-        gif_url       TEXT,
-        bio           TEXT,
-        active        BOOLEAN DEFAULT TRUE
+        id               SERIAL PRIMARY KEY,
+        name             TEXT    NOT NULL,
+        onlyfans_url     TEXT    NOT NULL,
+        gif_url          TEXT,
+        bio              TEXT,
+        active           BOOLEAN DEFAULT TRUE,
+        last_promoted_at TIMESTAMP
     )""",
     """CREATE TABLE IF NOT EXISTS purchases (
         id               SERIAL PRIMARY KEY,
@@ -200,20 +209,49 @@ _PG_SCHEMA_STATEMENTS = [
         id        SERIAL PRIMARY KEY,
         posted_at TIMESTAMP DEFAULT NOW()
     )""",
+    """CREATE TABLE IF NOT EXISTS config (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    )""",
+]
+
+# Migrations: columns added after initial schema (safe to re-run)
+_SQLITE_MIGRATIONS = [
+    "ALTER TABLE content  ADD COLUMN source_path     TEXT",
+    "ALTER TABLE creators ADD COLUMN last_promoted_at DATETIME",
+    "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT)",
+]
+
+_PG_MIGRATIONS = [
+    "ALTER TABLE content  ADD COLUMN IF NOT EXISTS source_path     TEXT",
+    "ALTER TABLE creators ADD COLUMN IF NOT EXISTS last_promoted_at TIMESTAMP",
+    "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT)",
 ]
 
 
 def init_db() -> None:
-    """Create all tables (idempotent). Runs the correct DDL for the active backend."""
+    """Create all tables and run migrations (idempotent)."""
     conn = get_connection()
     try:
         if _USE_POSTGRES:
             for stmt in _PG_SCHEMA_STATEMENTS:
                 _execute(conn, stmt)
             conn.commit()
+            for stmt in _PG_MIGRATIONS:
+                try:
+                    _execute(conn, stmt)
+                    conn.commit()
+                except Exception:
+                    pass   # column / table already exists
         else:
             conn.executescript(_SQLITE_SCHEMA)
             conn.commit()
+            for stmt in _SQLITE_MIGRATIONS:
+                try:
+                    conn.execute(stmt)
+                    conn.commit()
+                except Exception:
+                    pass   # column / table already exists
     finally:
         conn.close()
 
@@ -428,5 +466,133 @@ def has_purchased(telegram_user_id: int, content_id: int) -> bool:
             (telegram_user_id, content_id),
         )
         return row is not None
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Config helpers (key/value store for auto-scheduler state)
+# ---------------------------------------------------------------------------
+
+def get_config(key: str, default: str = "") -> str:
+    """Return the value for a config key, or `default` if not set.
+
+    Args:
+        key: Config key name.
+        default: Value returned when key is absent.
+    """
+    conn = get_connection()
+    try:
+        row = _fetchone(conn, f"SELECT value FROM config WHERE key = {_ph()}", (key,))
+        return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def set_config(key: str, value: str) -> None:
+    """Upsert a config key/value pair.
+
+    Args:
+        key: Config key name.
+        value: String value to store.
+    """
+    ph = _ph()
+    conn = get_connection()
+    try:
+        if _USE_POSTGRES:
+            _execute(
+                conn,
+                f"INSERT INTO config (key, value) VALUES ({ph},{ph}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                (key, value),
+            )
+        else:
+            _execute(
+                conn,
+                f"INSERT OR REPLACE INTO config (key, value) VALUES ({ph},{ph})",
+                (key, value),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Source-path helpers (track which local files have been uploaded)
+# ---------------------------------------------------------------------------
+
+def get_content_by_source_path(source_path: str) -> Optional[dict]:
+    """Return the content row whose source_path matches, or None.
+
+    Args:
+        source_path: Absolute local file path used when the content was uploaded.
+    """
+    conn = get_connection()
+    try:
+        return _fetchone(
+            conn,
+            f"SELECT * FROM content WHERE source_path = {_ph()}",
+            (source_path,),
+        )
+    finally:
+        conn.close()
+
+
+def set_content_source_path(content_id: int, source_path: str) -> None:
+    """Record the local file path that was uploaded for a content row.
+
+    Args:
+        content_id: The content row to update.
+        source_path: Absolute local path to the original file.
+    """
+    conn = get_connection()
+    try:
+        _execute(
+            conn,
+            f"UPDATE content SET source_path = {_ph()} WHERE id = {_ph()}",
+            (source_path, content_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# R2 cleanup helpers
+# ---------------------------------------------------------------------------
+
+def get_stale_content_for_cleanup(days: int = 7) -> list:
+    """Return posted content that is older than `days` and has no pending purchases.
+
+    Used by the daily R2 cleanup job.  PPV items that have been purchased are
+    kept so buyers can still re-download them.
+
+    Args:
+        days: Minimum age in days for content to be considered stale.
+    """
+    ph = _ph()
+    conn = get_connection()
+    try:
+        if _USE_POSTGRES:
+            sql = (
+                f"SELECT c.* FROM content c "
+                f"WHERE c.posted = TRUE "
+                f"AND c.posted_at < NOW() - INTERVAL '{days} days' "
+                f"AND c.file_url IS NOT NULL "
+                f"AND NOT EXISTS ("
+                f"  SELECT 1 FROM purchases p WHERE p.content_id = c.id"
+                f")"
+            )
+            return _fetchall(conn, sql)
+        else:
+            sql = (
+                f"SELECT c.* FROM content c "
+                f"WHERE c.posted = 1 "
+                f"AND c.posted_at < datetime('now', {ph}) "
+                f"AND c.file_url IS NOT NULL "
+                f"AND NOT EXISTS ("
+                f"  SELECT 1 FROM purchases p WHERE p.content_id = c.id"
+                f")"
+            )
+            return _fetchall(conn, sql, (f"-{days} days",))
     finally:
         conn.close()

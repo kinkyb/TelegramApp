@@ -50,6 +50,10 @@ MIN_FILE_SIZE = 1024   # 1 KB — skip empty/incomplete files
 # 5 s is usually past any intro black frames on short clips.
 THUMBNAIL_OFFSET_SECONDS = 5
 
+# GIFs larger than this are auto-converted to MP4 before upload.
+GIF_SIZE_LIMIT_BYTES   = 50 * 1024 * 1024   # 50 MB (Telegram animation limit)
+VIDEO_SIZE_LIMIT_BYTES = 45 * 1024 * 1024   # 45 MB — compress above this (Bot API max is 50 MB)
+
 
 # ---------------------------------------------------------------------------
 # ffmpeg helpers
@@ -117,6 +121,107 @@ def _extract_thumbnail(video_path: Path) -> Path | None:
         Path(tmp.name).unlink(missing_ok=True)
         return None
 
+    return Path(tmp.name)
+
+
+def _convert_gif_to_mp4(gif_path: Path) -> Path | None:
+    """Convert a GIF to a silent MP4 using ffmpeg.
+
+    Used when a GIF exceeds Telegram's 50 MB animation limit.
+
+    Args:
+        gif_path: Path to the local GIF file.
+
+    Returns:
+        Path to a temporary MP4 file, or None on failure.
+        Caller is responsible for deleting the temp file.
+    """
+    if not _ffmpeg_available():
+        logger.warning("ffmpeg not found — cannot convert GIF to MP4.")
+        return None
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    tmp.close()
+
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", str(gif_path),
+                "-movflags", "faststart",
+                "-pix_fmt", "yuv420p",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",  # ensure even dimensions
+                "-an",       # no audio
+                tmp.name,
+            ],
+            capture_output=True, timeout=120,
+        )
+        if result.returncode != 0:
+            logger.error("GIF→MP4 conversion failed: %s", result.stderr.decode())
+            Path(tmp.name).unlink(missing_ok=True)
+            return None
+    except subprocess.TimeoutExpired:
+        logger.error("ffmpeg timed out converting GIF: %s", gif_path.name)
+        Path(tmp.name).unlink(missing_ok=True)
+        return None
+
+    size_mb = Path(tmp.name).stat().st_size / 1024 / 1024
+    logger.info("GIF converted to MP4: %.1f MB → %s", size_mb, tmp.name)
+    return Path(tmp.name)
+
+
+def _compress_video(video_path: Path) -> Path | None:
+    """Compress a video to fit within Telegram's 50 MB Bot API limit.
+
+    Targets 720p at CRF 28 (good quality, small size). Most videos compress
+    to 20-40 MB. Falls back to 480p if still too large after first pass.
+
+    Args:
+        video_path: Path to the local video file.
+
+    Returns:
+        Path to a temporary compressed MP4, or None on failure.
+        Caller is responsible for deleting the temp file.
+    """
+    if not _ffmpeg_available():
+        logger.warning("ffmpeg not found — cannot compress video.")
+        return None
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    tmp.close()
+
+    for scale, crf in [("1280:720", "28"), ("854:480", "30")]:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", str(video_path),
+                "-vf", f"scale='min(iw,{scale.split(':')[0]})':'-2'",
+                "-c:v", "libx264",
+                "-crf", crf,
+                "-preset", "fast",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "faststart",
+                tmp.name,
+            ],
+            capture_output=True, timeout=1800,
+        )
+        if result.returncode != 0:
+            logger.error("Video compression failed: %s", result.stderr.decode()[:200])
+            Path(tmp.name).unlink(missing_ok=True)
+            return None
+
+        size = Path(tmp.name).stat().st_size
+        size_mb = size / 1024 / 1024
+        logger.info("Compressed video at %s CRF%s: %.1f MB", scale, crf, size_mb)
+
+        if size <= VIDEO_SIZE_LIMIT_BYTES:
+            return Path(tmp.name)
+
+        logger.info("Still too large (%.1f MB), retrying at lower quality…", size_mb)
+
+    # If still over limit after both passes, return what we have and let the bot handle it
+    logger.warning("Could not compress video under 45 MB — uploading anyway.")
     return Path(tmp.name)
 
 
@@ -194,32 +299,74 @@ class MediaHandler(FileSystemEventHandler):
         Args:
             path: Absolute path to the media file.
         """
-        folder     = "promo-gifs" if self.is_promo else "my-content"
-        file_type  = r2.detect_file_type(path.name)
-        object_key = f"{folder}/{path.name}"
+        folder    = "promo-gifs" if self.is_promo else "my-content"
+        file_type = r2.detect_file_type(path.name)
+        tmp_converted: Path | None = None
+
+        # --- Auto-convert oversized GIFs to MP4 ---
+        if file_type == "gif" and path.stat().st_size > GIF_SIZE_LIMIT_BYTES:
+            size_mb = path.stat().st_size / 1024 / 1024
+            logger.info(
+                "GIF too large for Telegram (%.1f MB) — converting to MP4: %s",
+                size_mb, path.name,
+            )
+            tmp_converted = _convert_gif_to_mp4(path)
+            if tmp_converted is None:
+                logger.error("Conversion failed — skipping %s", path.name)
+                return
+            # Treat the converted file as a video from here on
+            upload_path = tmp_converted
+            stem        = path.stem
+            object_key  = f"{folder}/{stem}.mp4"
+            file_type   = "video"
+        elif file_type == "video" and path.stat().st_size > VIDEO_SIZE_LIMIT_BYTES:
+            size_mb = path.stat().st_size / 1024 / 1024
+            logger.info(
+                "Video too large for Telegram (%.1f MB) — compressing: %s",
+                size_mb, path.name,
+            )
+            tmp_converted = _compress_video(path)
+            if tmp_converted is None:
+                logger.error("Compression failed — skipping %s", path.name)
+                return
+            upload_path = tmp_converted
+            # Keep original filename but ensure .mp4 extension
+            stem       = path.stem
+            object_key = f"{folder}/{stem}.mp4"
+        else:
+            upload_path = path
+            object_key  = f"{folder}/{path.name}"
 
         if r2.object_exists(object_key):
             logger.info("Already in R2, skipping: %s", object_key)
+            if tmp_converted:
+                tmp_converted.unlink(missing_ok=True)
             return
 
+        # --- Auto-thumbnail for videos (extract BEFORE deleting tmp_converted) ---
+        # Use the compressed/converted file if available — much faster than the original.
+        # Always key the thumbnail by the ORIGINAL filename stem so it's identifiable.
+        teaser_url = ""
+        if file_type == "video" and not self.is_promo:
+            thumb_source = upload_path   # compressed MP4 or original if no conversion
+            teaser_url = self._upload_thumbnail(thumb_source, name_stem=path.stem)
+
         # --- Upload main file ---
-        logger.info("Uploading %s → %s", path.name, object_key)
+        logger.info("Uploading %s → %s", upload_path.name, object_key)
         try:
-            file_url = r2.upload_file(str(path), object_key)
+            file_url = r2.upload_file(str(upload_path), object_key)
         except Exception as exc:
-            logger.error("Upload failed for %s: %s", path.name, exc)
+            logger.error("Upload failed for %s: %s", upload_path.name, exc)
             return
+        finally:
+            if tmp_converted:
+                tmp_converted.unlink(missing_ok=True)
 
         logger.info("Uploaded: %s", file_url)
 
         if self.is_promo:
             logger.info("Promo GIF ready — link to a creator in the DB: %s", file_url)
             return
-
-        # --- Auto-thumbnail for videos ---
-        teaser_url = ""
-        if file_type == "video":
-            teaser_url = self._upload_thumbnail(path)
 
         content_id = db.insert_content(
             file_url=file_url,
@@ -239,11 +386,13 @@ class MediaHandler(FileSystemEventHandler):
                 content_id, file_type,
             )
 
-    def _upload_thumbnail(self, video_path: Path) -> str:
+    def _upload_thumbnail(self, video_path: Path, name_stem: str | None = None) -> str:
         """Extract a thumbnail from the video and upload it to R2.
 
         Args:
-            video_path: Path to the local video file.
+            video_path: Path to the local video file to extract from.
+            name_stem: Stem to use for the R2 key (defaults to video_path.stem).
+                       Pass the original filename stem when video_path is a temp file.
 
         Returns:
             Public R2 URL of the thumbnail, or empty string on failure.
@@ -252,7 +401,8 @@ class MediaHandler(FileSystemEventHandler):
         if thumb_local is None:
             return ""
 
-        thumb_key = f"my-content/thumbs/{video_path.stem}.jpg"
+        stem = name_stem or video_path.stem
+        thumb_key = f"my-content/thumbs/{stem}.jpg"
         try:
             thumb_url = r2.upload_file(str(thumb_local), thumb_key)
             logger.info("Thumbnail uploaded: %s", thumb_url)
