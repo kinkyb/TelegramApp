@@ -152,6 +152,9 @@ GG_CREATORS = [
     ("emillia3",           "https://onlyfans.com/emillia3/c73"),
     ("lachicarocio",       "https://onlyfans.com/lachicarocio/c31"),
     ("softyasmin",         "https://onlyfans.com/softyasmin/trial/yn1na8f4ldec2lbjykqicpomovlxn17x"),
+    ("sya",                "https://onlyfans.com/action/trial/h0habqtcqxyjgdmej2ivfakgtbanrzhk"),
+    ("quincysin1",         "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
+    ("luna-dray",          "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
 ]
 
 
@@ -217,6 +220,43 @@ def _get_file_size(url: str) -> int:
         return 0
 
 
+def _get_video_orientation(video_path: Path) -> tuple[int, int, int]:
+    """Return (width, height, rotation_degrees) for a video file using ffprobe.
+
+    Reads both the stream dimensions and the 'rotate' metadata tag so we can
+    tell whether a video is actually portrait even if its raw dimensions say
+    landscape (common with iOS .MOV files recorded in portrait).
+
+    Args:
+        video_path: Path to the video file.
+
+    Returns:
+        Tuple of (width, height, rotation) where rotation is 0, 90, 180, or 270.
+    """
+    import json as _json
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json",
+         "-show_streams", "-show_entries",
+         "stream=width,height:stream_tags=rotate:format_tags=rotate",
+         str(video_path)],
+        capture_output=True, timeout=15,
+    )
+    if result.returncode != 0:
+        return 0, 0, 0
+    try:
+        data = _json.loads(result.stdout)
+        streams = [s for s in data.get("streams", []) if s.get("width")]
+        if not streams:
+            return 0, 0, 0
+        s   = streams[0]
+        w   = s.get("width", 0)
+        h   = s.get("height", 0)
+        rot = int(s.get("tags", {}).get("rotate", 0))
+        return w, h, rot
+    except Exception:
+        return 0, 0, 0
+
+
 def _compress_image_bytes(data: bytes, max_bytes: int = TELEGRAM_PHOTO_LIMIT) -> bytes:
     """Compress and resize JPEG image bytes to satisfy Telegram's photo limits.
 
@@ -238,6 +278,19 @@ def _compress_image_bytes(data: bytes, max_bytes: int = TELEGRAM_PHOTO_LIMIT) ->
         from PIL import Image
 
         img = Image.open(_io.BytesIO(data)).convert("RGB")
+
+        # Respect EXIF orientation first
+        try:
+            from PIL import ImageOps
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+
+        # Rotate landscape to portrait
+        w, h = img.size
+        if w > h:
+            img = img.rotate(90, expand=True)
+            logger.info("Image rotated 90° to portrait (%dx%d → %dx%d)", w, h, img.width, img.height)
 
         # Enforce Telegram's dimension constraint (w + h ≤ 10,000)
         w, h = img.size
@@ -937,7 +990,7 @@ def _grok_text_sync(prompt: str, temperature: float = 0.9) -> str:
     if not GROK_API_KEY:
         return ""
     payload = {
-        "model": "grok-3-latest",
+        "model": "grok-4-fast",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "max_tokens": 200,
@@ -967,21 +1020,25 @@ async def _tag_frame(image_path: Path) -> str:
     return await asyncio.to_thread(_grok_vision_sync, image_path, prompt, 0.1)
 
 
-async def _generate_ppv_teaser(tags: str) -> str:
-    """Generate a filthy one-sentence PPV teaser from video frame tags.
+async def _generate_ppv_teaser() -> str:
+    """Generate a unique filthy PPV teaser by rephrasing a fixed expression.
 
-    Args:
-        tags: Comma-separated explicit tags from _tag_frame().
+    No vision or frame analysis — Grok simply rewrites the base expression in
+    the most vulgar and explicit way it can each time.  Uses grok-4-fast at
+    temperature 0.9 (same settings as Acaption).
 
     Returns:
-        Single explicit sentence, or empty string.
+        Two-line teaser string (teaser sentence + unlock line), or static
+        fallback on API failure.
     """
     prompt = (
-        f"Write a single filthy, explicit, and enticing sentence teasing adult video content. "
-        f"The video shows: {tags}. "
-        f"Be extremely graphic and vulgar. Output only the sentence — no quotes, no intro."
+        "Rewrite the following adult content teaser in the most filthy, vulgar, and explicit "
+        "way possible. Keep it to 1-2 sentences maximum. Output only the rewritten text — "
+        "no quotes, no intro, no explanation.\n\n"
+        "Original: \"Exclusive content — this one is absolutely filthy 🔥 unlock & enjoy\""
     )
-    return await asyncio.to_thread(_grok_text_sync, prompt, 0.9)
+    result = await asyncio.to_thread(_grok_text_sync, prompt, 0.9)
+    return result if result else "Exclusive content — this one is absolutely filthy 🔥 unlock & enjoy"
 
 
 async def _generate_free_caption(context_hint: str = "") -> str:
@@ -1055,6 +1112,7 @@ def _extract_frame_local(video_path: Path) -> Path | None:
 def _compress_video_for_upload(video_path: Path) -> Path | None:
     """Compress a video to fit within Telegram's 45 MB upload budget (blocking).
 
+    Also corrects landscape orientation to portrait using ffprobe metadata.
     Tries 720p CRF 28 first, then 480p CRF 30 if still too large.
 
     Args:
@@ -1065,11 +1123,26 @@ def _compress_video_for_upload(video_path: Path) -> Path | None:
     """
     tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     tmp.close()
+
+    # Detect orientation — apply transpose filter if truly landscape
+    vw, vh, rot = _get_video_orientation(video_path)
+    # After applying rotation metadata, effective dimensions are:
+    if rot in (90, 270):
+        vw, vh = vh, vw   # metadata will rotate it, so effective is swapped
+    needs_rotate = vw > 0 and vh > 0 and vw > vh
+
     for scale, crf in [("1280:720", "28"), ("854:480", "30")]:
+        short_side = scale.split(":")[1]  # e.g. "720"
+        if needs_rotate:
+            # Rotate 90° CW then scale so the long side fits
+            vf = f"transpose=1,scale='-2:min(ih,{short_side})'"
+        else:
+            vf = f"scale='min(iw,{scale.split(':')[0]})':'-2'"
+
         result = subprocess.run(
             [
                 "ffmpeg", "-y", "-i", str(video_path),
-                "-vf", f"scale='min(iw,{scale.split(':')[0]})':'-2'",
+                "-vf", vf,
                 "-c:v", "libx264", "-crf", crf, "-preset", "fast",
                 "-c:a", "aac", "-b:a", "128k", "-movflags", "faststart",
                 tmp.name,
@@ -1082,7 +1155,8 @@ def _compress_video_for_upload(video_path: Path) -> Path | None:
             Path(tmp.name).unlink(missing_ok=True)
             return None
         size = Path(tmp.name).stat().st_size
-        logger.info("Compressed at %s CRF%s → %.1f MB", scale, crf, size / 1024 / 1024)
+        logger.info("Compressed at %s CRF%s%s → %.1f MB",
+                    scale, crf, " [rotated]" if needs_rotate else "", size / 1024 / 1024)
         if size <= 45 * 1024 * 1024:
             return Path(tmp.name)
         logger.info("Still %.1f MB — retrying at lower quality…", size / 1024 / 1024)
@@ -1184,19 +1258,55 @@ async def job_free_post(context: ContextTypes.DEFAULT_TYPE) -> None:
         file_url   = existing["file_url"]
         logger.info("Auto free: reusing existing content_id=%d", content_id)
     else:
-        # Upload to R2
+        # Compress/convert oversized files before uploading
+        upload_path    = file_path
+        tmp_compressed: Path | None = None
+        size_bytes     = file_path.stat().st_size
+
+        if file_type == "video" and size_bytes > 45 * 1024 * 1024:
+            logger.info("Auto free: compressing video %s (%.1f MB)",
+                        file_path.name, size_bytes / 1024 / 1024)
+            tmp_compressed = await asyncio.to_thread(_compress_video_for_upload, file_path)
+            if tmp_compressed:
+                upload_path = tmp_compressed
+
+        elif file_type == "gif" and size_bytes > TELEGRAM_UPLOAD_LIMIT:
+            logger.info("Auto free: converting GIF %s (%.1f MB) to MP4",
+                        file_path.name, size_bytes / 1024 / 1024)
+            def _gif_to_mp4_free(src: Path) -> Path | None:
+                tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+                tmp.close()
+                res = subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(src),
+                     "-movflags", "faststart", "-pix_fmt", "yuv420p",
+                     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                     tmp.name],
+                    capture_output=True, timeout=300,
+                )
+                if res.returncode != 0:
+                    Path(tmp.name).unlink(missing_ok=True)
+                    return None
+                return Path(tmp.name)
+            tmp_compressed = await asyncio.to_thread(_gif_to_mp4_free, file_path)
+            if tmp_compressed:
+                upload_path = tmp_compressed
+                file_type   = "gif"   # sendAnimation handles MP4
+
         folder     = "my-content"
-        object_key = f"{folder}/{file_path.name}"
+        object_key = f"{folder}/{file_path.stem}.mp4" if tmp_compressed else f"{folder}/{file_path.name}"
         try:
             if r2.object_exists(object_key):
                 file_url = r2.public_url(object_key)
             else:
                 logger.info("Auto free: uploading %s (%.1f MB)",
-                            file_path.name, file_path.stat().st_size / 1024 / 1024)
-                file_url = await asyncio.to_thread(r2.upload_file, str(file_path), object_key)
+                            upload_path.name, upload_path.stat().st_size / 1024 / 1024)
+                file_url = await asyncio.to_thread(r2.upload_file, str(upload_path), object_key)
         except Exception as exc:
             logger.error("Auto free: R2 upload failed for %s: %s", file_path.name, exc)
             return
+        finally:
+            if tmp_compressed:
+                tmp_compressed.unlink(missing_ok=True)
 
         content_id = db.insert_content(
             file_url=file_url,
@@ -1391,30 +1501,18 @@ async def job_ppv_post(context: ContextTypes.DEFAULT_TYPE) -> None:
             db.set_ppv(content_id, price_stars)
         logger.info("Auto PPV: reusing existing content_id=%d", content_id)
 
-    # Extract frame → Grok tags → filthy teaser sentence
-    teaser_sentence = ""
-    frame_path: Path | None = await asyncio.to_thread(_extract_frame_local, video_path)
-    if frame_path and GROK_API_KEY:
+    # Generate unique filthy teaser via Grok (no vision — pure text rephrasing)
+    teaser_text = ""
+    if GROK_API_KEY:
         try:
-            tags = await _tag_frame(frame_path)
-            if tags:
-                teaser_sentence = await _generate_ppv_teaser(tags)
+            teaser_text = await _generate_ppv_teaser()
         except Exception as exc:
-            logger.warning("Auto PPV: Grok tagging failed: %s", exc)
-        finally:
-            frame_path.unlink(missing_ok=True)
-    elif frame_path:
-        frame_path.unlink(missing_ok=True)
+            logger.warning("Auto PPV: Grok teaser failed: %s", exc)
 
-    if not teaser_sentence:
-        teaser_sentence = "Exclusive content — this one is absolutely filthy 🔥"
+    if not teaser_text:
+        teaser_text = "Exclusive content — this one is absolutely filthy 🔥 unlock & enjoy"
 
-    full_caption = (
-        f"💋 {teaser_sentence} 💋\n"
-        f"unlock & enjoy 💋\n"
-        f"For all my productions ever made (not just teasers) go for my VIP No Promo Lounge "
-        f"at {VIP_LOUNGE_URL} 💋"
-    )
+    full_caption = f"💋 {teaser_text} 💋"
 
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton(

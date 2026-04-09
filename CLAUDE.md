@@ -1,227 +1,189 @@
-# CLAUDE.md — Telegram Content Bot + Mini App
+# CLAUDE.md — Telegram Content Bot (KinkyBeatrice)
 
 ## Project Overview
 
-A Telegram bot and mini app for a solo content creator to:
-- Auto-post content (images, video, GIFs) from a local library to a Telegram channel
-- Promote ~50 other creators with GIF cards linking to their OnlyFans pages
-- Charge for selected posts via Telegram Stars (PPV, occasional)
-- Serve a scrollable mini app feed inside Telegram
+A fully automated Telegram posting bot for @kinkybeatricelounge running locally on Mac.
+Posts every 15 minutes in a 4-slot repeating cycle — no manual intervention needed once started.
+
+**Channel:** @kinkybeatricelounge
+**Bot runs:** locally via `start_bot.command` (not on Render)
+**Render:** used only for Acaption bot — TelegramApp Render blueprints have been deleted
+
+---
+
+## How to Start
+
+```bash
+# Double-click:
+start_bot.command        # starts watcher.py + bot.py
+
+# Then DM the bot:
+/autostart               # kicks off the 4-slot scheduler
+                         # (auto-resumes on restart — no need to /autostart again)
+```
+
+---
+
+## 4-Slot Auto-Scheduler (1-hour cycle, 15-min slots)
+
+| Slot | What fires | Media source | Caption source |
+|---|---|---|---|
+| :00 | Free post | `posted_archive.json` file_path (own content, non-GG) | Archive caption + VIP suffix |
+| :15 | GG promo | `/Volumes/All/GG/gifs/{slug}/{slug}.gif` | Archive matched by slug in file_path |
+| :30 | PPV video | `/Volumes/All/Videos/0-1 min/` + `1-5 min/` | Grok-4-fast rephrase of filthy template |
+| :45 | GG promo | same as :15, rotation continues | same as :15 |
+
+**Caption cache:** `~/Desktop/XAutoPosting/posted_archive.json` — shared with XAutoPosting.
+3 of 4 slots reuse archived captions (zero Grok cost). Only PPV calls Grok.
+
+**Free post suffix (appended to every free post caption):**
+```
+For paid fucks without other girls sub to Kinky Beatrice No Promo Lounge at https://onlyfans.com/kinkybeatricevip/c15
+```
+
+**PPV caption format:**
+```
+💋 [Grok-4-fast filthy rephrase] 💋
+```
+No VIP lounge line on PPV posts.
+
+**Scheduler commands:**
+- `/autostart` — start scheduler (also auto-resumes on bot restart)
+- `/autostop` — stop scheduler
+- `/autostatus` — show status, pool sizes, next video/creator
+- `/setppvprice <stars>` — change default PPV price (currently 1000 ⭐ = ~$9.10 net)
 
 ---
 
 ## Architecture
 
 ```
-local-library/
-├── my-content/        # Creator's own photos/videos
-└── promo-gifs/        # GIFs for promoted creators
+/Volumes/All/                     # Local media library (Mac external drive)
+├── Images/                       # KB's own photos
+├── Gifs/                         # KB's own GIFs
+├── Videos/0-1 min/               # PPV video pool
+├── Videos/1-5 min/               # PPV video pool
+└── GG/gifs/{slug}/{slug}.gif     # GG creator promo GIFs
 
-sync-script (Python)   # Watches local folders, uploads to R2
+XAutoPosting/posted_archive.json  # Shared caption cache (2600+ entries)
          ↓
-Cloudflare R2          # Cloud media storage (CDN URLs)
+bot.py (local)                    # Reads archive, uploads to R2, posts to Telegram
          ↓
-Flask backend          # Bot logic, DB, payment handling
+Cloudflare R2                     # Media storage (CDN)
          ↓
-Telegram Bot API       # Channel posts, PPV invoices, mini app
-         ↓
-Mini App (React)       # In-app feed UI
+Telegram Bot API                  # Channel + DM delivery
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer | Choice | Reason |
-|---|---|---|
-| Bot framework | python-telegram-bot v20 | Async, well-maintained |
-| Backend | Flask | Already familiar |
-| Database | SQLite (MVP) → Postgres | Simple to start |
-| Media storage | Cloudflare R2 | Free tier, S3-compatible |
-| Local sync | Watchdog (Python) | Folder watcher |
-| Payments | Telegram Stars | No approval needed, instant |
-| Mini app frontend | React + Vite | Fast dev, TG SDK support |
+| Layer | Choice |
+|---|---|
+| Bot framework | python-telegram-bot v21 + APScheduler (job-queue extra) |
+| Database | SQLite (`bot.db`) locally |
+| Media storage | Cloudflare R2 (S3-compatible, free tier) |
+| Image compression | Pillow (auto resize/compress to fit Telegram 10MB/10000px limits) |
+| Video compression | ffmpeg (compress >45MB, GIF→MP4 for >50MB GIFs) |
+| Orientation fix | ffprobe (detect) + ffmpeg transpose / Pillow exif_transpose |
+| Caption AI | Grok-4-fast (xai API, temp=0.9, PPV only) |
+| Payments | Telegram Stars (XTR, no provider setup needed) |
 
 ---
 
-## Core Components
+## Manual Commands (owner-only)
 
-### 1. Local Library Watcher (`watcher.py`)
+- `/post <id> [caption]` — post free content from DB
+- `/ppv <id> <stars> [caption]` — mark as PPV and post teaser
+- `/promo <creator_id>` — post a creator GIF manually
+- `/schedule` — show unposted queue
 
-- Monitors `local-library/my-content/` and `local-library/promo-gifs/`
-- On new file detected:
-  - Uploads to Cloudflare R2
-  - Inserts record into SQLite DB with metadata:
-    - `file_url`, `file_type`, `creator_id` (null for own content), `is_ppv` (default false), `ppv_price_stars`, `uploaded_at`
-- Runs as a background daemon
+---
 
-### 2. Database Schema (`schema.sql`)
+## Database Schema (SQLite `bot.db`)
 
 ```sql
--- Own content
-CREATE TABLE content (
-  id INTEGER PRIMARY KEY,
-  file_url TEXT NOT NULL,
-  file_type TEXT,           -- image, video, gif
-  caption TEXT,
-  is_ppv BOOLEAN DEFAULT 0,
-  ppv_price_stars INTEGER,
-  posted BOOLEAN DEFAULT 0,
-  posted_at DATETIME,
-  uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Promoted creators
-CREATE TABLE creators (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  onlyfans_url TEXT NOT NULL,
-  gif_url TEXT,             -- R2 URL of promo GIF
-  bio TEXT,
-  active BOOLEAN DEFAULT 1
-);
-
--- PPV purchase records
-CREATE TABLE purchases (
-  id INTEGER PRIMARY KEY,
-  telegram_user_id INTEGER,
-  content_id INTEGER,
-  stars_paid INTEGER,
-  purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+content     — id, file_url, teaser_url, file_type, caption, is_ppv,
+              ppv_price_stars, posted, posted_at, uploaded_at, source_path
+creators    — id, name, onlyfans_url, gif_url, bio, active, last_promoted_at
+purchases   — id, telegram_user_id, content_id, stars_paid, purchased_at
+promo_posts — id, posted_at
+config      — key, value  (scheduler state: auto_enabled, gg_creator_index,
+                            ppv_video_index, free_archive_index, ppv_price_stars)
 ```
 
-### 3. Telegram Bot (`bot.py`)
+---
 
-**Commands:**
-- `/post [content_id]` — manually post a specific item to channel
-- `/ppv [content_id] [stars]` — mark content as PPV and post
-- `/promo [creator_id]` — post a creator promo GIF to channel
-- `/schedule` — show posting queue
+## Media Handling Rules
 
-**Channel posting logic:**
-- Free content: sends media directly to channel with caption
-- PPV content: sends blurred preview + Stars invoice button
-- Promo post: sends creator GIF with OF link button
+- **Images >10 MB or width+height >10,000 px:** Pillow auto-compress + resize to portrait
+- **Videos >45 MB:** ffmpeg compress (720p CRF28 → 480p CRF30 fallback, 1800s timeout)
+- **GIFs >50 MB:** ffmpeg convert to MP4 (sendAnimation handles MP4 fine)
+- **Landscape orientation:** auto-rotated to portrait (EXIF for images, ffprobe+transpose for video)
+- **Files ≤50 MB:** downloaded as bytes and sent directly (avoids R2 CDN Cloudflare block)
+- **Files >50 MB:** sent via R2 URL (Telegram fetches directly)
 
-**PPV Flow:**
-1. Bot posts preview (low-res or blurred) to channel
-2. User clicks "Unlock for X Stars"
-3. Bot sends Telegram Stars invoice via `send_invoice`
-4. On `pre_checkout_query`: validate and answer ok
-5. On `successful_payment`: record in `purchases` table, send full content to user via DM
+---
 
-### 4. Mini App Backend (Flask routes)
+## GG Creators List
 
-```
-GET  /api/feed              → paginated content list (free items)
-GET  /api/creators          → all active promoted creators
-GET  /api/content/:id       → single item (checks purchase if PPV)
-POST /api/purchase/verify   → verify Stars payment, return content URL
-```
+53 creators in `GG_CREATORS` in `bot.py`. Each entry: `(slug, trial_link)`.
+GIF path convention: `/Volumes/All/GG/gifs/{slug}/{slug}.gif`
 
-### 5. Mini App Frontend (React)
+**To add a new creator:** add to `GG_CREATORS` list in `bot.py`, matching the slug
+used in XAutoPosting and the folder name in `/Volumes/All/GG/gifs/`.
 
-**Pages:**
-- `Feed` — scrollable grid/list of own content + interleaved creator promos
-- `CreatorCard` — GIF, name, bio, "Visit OnlyFans" button
-- `PPVModal` — Stars payment prompt for locked content
+**Current creators include:** goodgirlhana, monica-de-mistress, adalyn-diary,
+ambersplayland, sya, quincysin1, luna-dray + 46 others (see bot.py for full list).
 
-**Telegram SDK integration:**
-```javascript
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
-// Use tg.initDataUnsafe.user for user identity
-// Use tg.MainButton for primary actions
-```
+---
+
+## PPV Flow
+
+1. Bot posts text-only teaser with Grok caption + "Unlock for X Stars" button to channel
+2. User taps → bot sends Telegram Stars invoice via DM
+3. `pre_checkout_query` → validate & approve (within 10 s)
+4. `successful_payment` → record in `purchases`, DM full video to user
+
+Default price: **1,000 Stars (~$9.10 net)**. Change with `/setppvprice`.
+
+---
+
+## R2 Cleanup
+
+Daily job at 03:00 UTC deletes R2 objects for content posted >7 days ago,
+**skipping** items that have been purchased (buyers need continued access).
 
 ---
 
 ## Environment Variables
 
 ```env
-BOT_TOKEN=your_botfather_token
+BOT_TOKEN=
+CHANNEL_ID=@kinkybeatricelounge
+OWNER_TELEGRAM_IDS=7677422869
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
-R2_PUBLIC_URL=https://your-bucket.r2.dev
-CHANNEL_ID=@yourchannel
+R2_BUCKET_NAME=kinkybeatriceloungebot
+R2_PUBLIC_URL=https://pub-cbe3a6abe8564a649cb1c88bfda6a420.r2.dev
 DATABASE_URL=sqlite:///bot.db
 FLASK_SECRET_KEY=
-MINI_APP_URL=https://your-mini-app-domain.com
+MINI_APP_URL=https://classy-chaja-7120c1.netlify.app
+GROK_API_KEY=                     # xai- key (shared with XAutoPosting)
+DEFAULT_PPV_PRICE=1000
+# SLOT_GAP_SECONDS=15             # uncomment for fast test cycle (60s total)
 ```
 
 ---
 
-## File Structure
+## Key Notes
 
-```
-project/
-├── CLAUDE.md
-├── .env
-├── requirements.txt
-├── schema.sql
-├── watcher.py           # Local folder watcher + R2 uploader
-├── bot.py               # Telegram bot (python-telegram-bot)
-├── app.py               # Flask API server
-├── db.py                # DB helpers
-├── r2.py                # Cloudflare R2 upload helpers
-├── mini-app/
-│   ├── index.html
-│   ├── src/
-│   │   ├── main.jsx
-│   │   ├── App.jsx
-│   │   ├── components/
-│   │   │   ├── Feed.jsx
-│   │   │   ├── CreatorCard.jsx
-│   │   │   └── PPVModal.jsx
-│   │   └── api.js
-│   └── vite.config.js
-└── local-library/       # Gitignored — local media only
-    ├── my-content/
-    └── promo-gifs/
-```
-
----
-
-## Build Order for Claude Code
-
-1. `schema.sql` + `db.py` — database foundation
-2. `r2.py` — R2 upload/URL helpers
-3. `watcher.py` — local folder watcher
-4. `bot.py` — core bot with channel posting + PPV Stars flow
-5. `app.py` — Flask API for mini app
-6. `mini-app/` — React frontend
-
----
-
-## Key Constraints
-
-- All media served from R2 public URLs — bot never serves from local disk
-- Bot must answer `pre_checkout_query` within 10 seconds (Telegram requirement)
-- Mini app must call `tg.ready()` immediately on load
-- SQLite is fine for MVP; migrate to Postgres before scaling
-- `local-library/` must be in `.gitignore` — never commit media
-- Stars conversion: 1 Star ≈ $0.013 USD; Telegram keeps 30%
-
----
-
-## Claude Code Instructions
-
-You are building a Telegram content bot and mini app from this CLAUDE.md spec.
-
-**Rules:**
-- Follow the file structure exactly
-- Write async Python throughout (python-telegram-bot v20 uses asyncio)
-- Use `boto3` with custom endpoint for Cloudflare R2 (not AWS S3)
-- Never hardcode credentials — always read from `.env` via `python-dotenv`
-- Add docstrings to every function
-- SQLite WAL mode on for concurrent read/write
-- All Flask routes return JSON
-- React components use functional style with hooks only
-- Telegram Stars invoices use `currency="XTR"` and `prices=[LabeledPrice("Unlock", stars_amount)]`
-- Test PPV flow end-to-end before moving to mini app
-
-**Start with:** `schema.sql` → `db.py` → `r2.py` → `watcher.py` → `bot.py`
+- **Bot runs locally** — Mac must stay awake. No Render for this workflow.
+- **Render is for Acaption only** — TelegramApp Render blueprints deleted.
+- **Archive grows daily** — XAutoPosting appends to `posted_archive.json` automatically,
+  growing the free post and promo caption pool without any manual action.
+- **Duplicate process protection** — if `start_bot.command` is double-clicked,
+  kill duplicate PIDs with `pgrep -f "bot.py|watcher.py" | xargs kill`
+- **PTB version:** v21 — requires `pip install "python-telegram-bot[job-queue]"`
+- **Stars conversion:** 1 Star = $0.013 gross, Telegram keeps 30%, net ≈ $0.0091/star
