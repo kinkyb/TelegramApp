@@ -2,6 +2,7 @@
 
 ## Workflow Rules
 - **Verify deploy target before deploying**: Before running any deploy command, confirm which Netlify site ID / project it will deploy to. Check `.netlify/state.json` or use `--site` flag explicitly. Deploying to the wrong site is a silent failure — the correct site gets nothing.
+- **Update CLAUDE.md after every push**: After every git push, update the project's CLAUDE.md to reflect any changes made — new features, changed behaviour, updated stack details, new rules. Commit and push the CLAUDE.md update immediately after.
 
 ## Project Overview
 
