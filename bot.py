@@ -156,6 +156,7 @@ GG_CREATORS = [
     ("quincysin1",         "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
     ("luna-dray",          "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
     ("nikkita-ts",         "https://onlyfans.com/nikkita.ts/c52"),
+    ("littlefoxira",       "https://onlyfans.com/littlefoxira/trial/kgnqmez8dgqmb3tzowmnw5bbzle6azya"),
 ]
 
 
