@@ -15,6 +15,31 @@ Posts every 15 minutes in a 4-slot repeating cycle — no manual intervention ne
 
 ---
 
+## Process Management — launchd
+
+**Label**: `com.adam.telegram-bot`
+**Plist**: `~/Library/LaunchAgents/com.adam.telegram-bot.plist`
+**Mode**: `KeepAlive: true`, `RunAtLoad: true` — restarts on crash, starts on login after reboot
+
+Both `watcher.py` and `bot.py` are managed by a single plist using a `bash -c` wrapper. When `bot.py` exits, `watcher.py` is killed too, so launchd restarts both cleanly together. Independent — no Chromium dependency.
+
+The `/autostart` scheduler command auto-resumes on bot restart — no manual intervention needed.
+
+```bash
+# Check running
+launchctl list | grep telegram-bot
+
+# Restart
+launchctl bootout gui/$(id -u)/com.adam.telegram-bot
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.adam.telegram-bot.plist
+
+# Logs
+tail -f ~/Desktop/TelegramApp/bot.log
+tail -f ~/Desktop/TelegramApp/bot_err.log
+```
+
+**Do NOT use `start_bot.command`** while the launchd agent is active — it would create a duplicate instance. Use launchctl commands above instead.
+
 ## How to Start
 
 ```bash

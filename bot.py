@@ -155,6 +155,7 @@ GG_CREATORS = [
     ("sya",                "https://onlyfans.com/action/trial/h0habqtcqxyjgdmej2ivfakgtbanrzhk"),
     ("quincysin1",         "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
     ("luna-dray",          "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
+    ("nikkita-ts",         "https://onlyfans.com/nikkita.ts/c52"),
 ]
 
 
@@ -1292,37 +1293,67 @@ async def job_free_post(context: ContextTypes.DEFAULT_TYPE) -> None:
                 upload_path = tmp_compressed
                 file_type   = "gif"   # sendAnimation handles MP4
 
-        folder     = "my-content"
-        object_key = f"{folder}/{file_path.stem}.mp4" if tmp_compressed else f"{folder}/{file_path.name}"
+        folder      = "my-content"
+        safe_name   = file_path.name.replace(" ", "_")
+        safe_stem   = file_path.stem.replace(" ", "_")
+        object_key  = f"{folder}/{safe_stem}.mp4" if tmp_compressed else f"{folder}/{safe_name}"
+        r2_ok = False
         try:
             if r2.object_exists(object_key):
                 file_url = r2.public_url(object_key)
+                r2_ok = True
             else:
                 logger.info("Auto free: uploading %s (%.1f MB)",
                             upload_path.name, upload_path.stat().st_size / 1024 / 1024)
                 file_url = await asyncio.to_thread(r2.upload_file, str(upload_path), object_key)
+                r2_ok = True
         except Exception as exc:
-            logger.error("Auto free: R2 upload failed for %s: %s", file_path.name, exc)
-            return
+            logger.warning("Auto free: R2 upload failed for %s: %s — will send directly", file_path.name, exc)
+            file_url = ""   # will send from local bytes below
         finally:
-            if tmp_compressed:
+            if tmp_compressed and r2_ok:
                 tmp_compressed.unlink(missing_ok=True)
 
-        content_id = db.insert_content(
-            file_url=file_url,
-            file_type=file_type,
-            caption=caption,
-        )
-        db.set_content_source_path(content_id, source)
+        if r2_ok:
+            content_id = db.insert_content(file_url=file_url, file_type=file_type, caption=caption)
+            db.set_content_source_path(content_id, source)
+        else:
+            # R2 down — send local file directly as bytes (no DB record, will retry upload next time)
+            content_id = None
 
     try:
-        fake_row = {"id": content_id, "file_url": file_url, "file_type": file_type,
-                    "caption": caption, "is_ppv": False, "teaser_url": ""}
-        await _post_free(context, fake_row, caption_override=caption)
-        db.mark_posted(content_id)
-        logger.info("Auto free: posted content_id=%d  file=%s", content_id, file_path.name)
+        if content_id is not None:
+            # Normal path — send from R2 URL
+            fake_row = {"id": content_id, "file_url": file_url, "file_type": file_type,
+                        "caption": caption, "is_ppv": False, "teaser_url": ""}
+            await _post_free(context, fake_row, caption_override=caption)
+            db.mark_posted(content_id)
+            logger.info("Auto free: posted content_id=%d  file=%s", content_id, file_path.name)
+        else:
+            # R2 down — send local bytes directly, don't mark as posted (retry upload next cycle)
+            import io as _io
+            send_path = tmp_compressed if (tmp_compressed and tmp_compressed.exists()) else upload_path
+            with send_path.open("rb") as fh:
+                raw = fh.read()
+            if file_type == "image":
+                raw = _compress_image_bytes(raw)
+            from telegram import InputFile as _IF
+            media = _IF(_io.BytesIO(raw), filename=send_path.name)
+            kwargs = dict(caption=caption)
+            if file_type == "image":
+                await context.bot.send_photo(chat_id=CHANNEL_ID, photo=media, **kwargs)
+            elif file_type == "video":
+                await context.bot.send_video(chat_id=CHANNEL_ID, video=media, **kwargs)
+            else:
+                await context.bot.send_animation(chat_id=CHANNEL_ID, animation=media, **kwargs)
+            if tmp_compressed and tmp_compressed.exists():
+                tmp_compressed.unlink(missing_ok=True)
+            logger.info("Auto free: posted %s directly (R2 bypassed)", file_path.name)
+            # Advance the archive index so next cycle picks a different file
     except Exception as exc:
         logger.error("Auto free: post failed for %s: %s", file_path.name, exc)
+        if tmp_compressed and tmp_compressed.exists():
+            tmp_compressed.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1398,6 +1429,7 @@ async def job_promo_girl(context: ContextTypes.DEFAULT_TYPE) -> None:
                 r2_key      = f"promo-gifs/{slug}/{slug}.mp4"
                 gif_type    = "gif"   # sendAnimation handles MP4 fine
 
+        local_send_path: Path | None = None
         try:
             if r2.object_exists(r2_key):
                 gif_url = r2.public_url(r2_key)
@@ -1406,9 +1438,10 @@ async def job_promo_girl(context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.info("Auto promo: uploaded %s for %s to R2 (%.1f MB)",
                             upload_path.suffix, slug, upload_path.stat().st_size / 1024 / 1024)
         except Exception as exc:
-            logger.warning("Auto promo: upload failed for %s: %s", slug, exc)
+            logger.warning("Auto promo: R2 upload failed for %s: %s — sending directly", slug, exc)
+            local_send_path = upload_path  # bypass R2, send local bytes
         finally:
-            if tmp_mp4:
+            if tmp_mp4 and gif_url:
                 tmp_mp4.unlink(missing_ok=True)
     else:
         logger.info("Auto promo: no GIF found for %s at %s", slug, gif_local)
@@ -1417,18 +1450,34 @@ async def job_promo_girl(context: ContextTypes.DEFAULT_TYPE) -> None:
         InlineKeyboardButton("💋 Visit OnlyFans (free trial)", url=trial_link)
     ]])
 
+    if not gif_url and not local_send_path:
+        logger.warning("Auto promo: skipping %s — no GIF available", slug)
+        db.set_config("gg_creator_index", str(idx))
+        return
+
     try:
         if gif_url:
             await _send_media(context, CHANNEL_ID, gif_url, "gif",
                               caption=full_caption, reply_markup=keyboard)
         else:
-            await context.bot.send_message(
-                chat_id=CHANNEL_ID, text=full_caption, reply_markup=keyboard,
+            import io as _io
+            with local_send_path.open("rb") as fh:
+                raw = fh.read()
+            from telegram import InputFile as _IF
+            media = _IF(_io.BytesIO(raw), filename=local_send_path.name)
+            await context.bot.send_animation(
+                chat_id=CHANNEL_ID, animation=media,
+                caption=full_caption, reply_markup=keyboard,
             )
+            if tmp_mp4 and tmp_mp4.exists():
+                tmp_mp4.unlink(missing_ok=True)
+            logger.info("Auto promo: sent %s directly (R2 bypassed)", slug)
         db.record_promo_post()
         logger.info("Auto promo: posted %s (idx=%d)", slug, idx)
     except Exception as exc:
         logger.error("Auto promo: post failed for %s: %s", slug, exc)
+        if tmp_mp4 and tmp_mp4.exists():
+            tmp_mp4.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
