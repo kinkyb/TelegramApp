@@ -104,7 +104,6 @@ VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 GG_CREATORS = [
     ("goodgirlhana",       "https://onlyfans.com/goodgirlhana/trial/98x1xaq09yo46pubcbtvd1urmaftc2cr"),
     ("monica-de-mistress", "https://onlyfans.com/monica_de_mistress/trial/iqq6lgdsoa1qaietvreotxhduhgvnqzx"),
-    ("elizabeth-baby",     "https://onlyfans.com/elizabeth_baby/c28"),
     ("sunny-bunny-xx",     "https://onlyfans.com/sunny.bunny.xx/trial/7ylsomutjw1nxfywiiupgi7nzjinwfip"),
     ("slimkary",           "https://onlyfans.com/slimkary/c145"),
     ("panteritaaa",        "https://onlyfans.com/panteritaaa/trial/zo6w1whexceytrfwfw6h1ooozyjkidrb"),
@@ -157,6 +156,7 @@ GG_CREATORS = [
     ("luna-dray",          "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
     ("nikkita-ts",         "https://onlyfans.com/nikkita.ts/c52"),
     ("littlefoxira",       "https://onlyfans.com/littlefoxira/trial/kgnqmez8dgqmb3tzowmnw5bbzle6azya"),
+    ("little-jane",        "https://onlyfans.com/little_jane/c40"),
 ]
 
 
