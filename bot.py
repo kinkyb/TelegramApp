@@ -140,7 +140,6 @@ GG_CREATORS = [
     ("avemylissaa",           "https://onlyfans.com/avemylissaa/trial/t8vuxpmveycvjmkq3owca5hshqb7v0nh"),
     ("panteritaaa",           "https://onlyfans.com/panteritaaa/c20"),
     ("callysto-nymph",        "https://onlyfans.com/callysto_nymph/trial/c2gdchg7h1cs1dml1b1lqvdi9mqpcbpg"),
-    ("monica-de-mistress",    "https://onlyfans.com/monica_de_mistress/trial/iqq6lgdsoa1qaietvreotxhduhgvnqzx"),
     ("xprincessnx",           "https://onlyfans.com/xprincessnx/trial/2d60smotandzadtgbzo7kektch8it9x1"),
     ("aryastark2024",         "https://onlyfans.com/aryastark2024/trial/klmvadpjkgaaqejcqjdqh2sorjn1absy"),
     ("leonayla",              "https://onlyfans.com/leonayla/trial/xofiuyrxc8qtcybjdhscz1i7iwiiaaqd"),
