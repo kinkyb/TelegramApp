@@ -578,6 +578,7 @@ def get_stale_content_for_cleanup(days: int = 7) -> list:
                 f"WHERE c.posted = TRUE "
                 f"AND c.posted_at < NOW() - INTERVAL '{days} days' "
                 f"AND c.file_url IS NOT NULL "
+                f"AND c.file_url <> '' "
                 f"AND NOT EXISTS ("
                 f"  SELECT 1 FROM purchases p WHERE p.content_id = c.id"
                 f")"
@@ -589,10 +590,30 @@ def get_stale_content_for_cleanup(days: int = 7) -> list:
                 f"WHERE c.posted = 1 "
                 f"AND c.posted_at < datetime('now', {ph}) "
                 f"AND c.file_url IS NOT NULL "
+                f"AND c.file_url != '' "
                 f"AND NOT EXISTS ("
                 f"  SELECT 1 FROM purchases p WHERE p.content_id = c.id"
                 f")"
             )
             return _fetchall(conn, sql, (f"-{days} days",))
+    finally:
+        conn.close()
+
+
+def mark_r2_cleaned(content_id: int) -> None:
+    """Mark a content row as R2-cleaned by setting file_url and teaser_url to ''.
+
+    The schema declares `file_url TEXT NOT NULL`, so we use the empty string
+    as the cleaned-marker (NULL would violate the constraint). The cleanup
+    query filters out rows with `file_url = ''` so they're permanently
+    excluded from future cleanup runs (which prevents the
+    daily-rerun-on-same-row issue).
+    """
+    ph = _ph()
+    conn = get_connection()
+    try:
+        sql = f"UPDATE content SET file_url = '', teaser_url = '' WHERE id = {ph}"
+        _execute(conn, sql, (content_id,))
+        conn.commit()
     finally:
         conn.close()

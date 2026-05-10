@@ -102,61 +102,67 @@ VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
 # GG creators mirrored from XAutoPosting (slug, trial_link)
 GG_CREATORS = [
-    ("goodgirlhana",       "https://onlyfans.com/goodgirlhana/trial/98x1xaq09yo46pubcbtvd1urmaftc2cr"),
-    ("monica-de-mistress", "https://onlyfans.com/monica_de_mistress/trial/iqq6lgdsoa1qaietvreotxhduhgvnqzx"),
-    ("sunny-bunny-xx",     "https://onlyfans.com/sunny.bunny.xx/trial/7ylsomutjw1nxfywiiupgi7nzjinwfip"),
-    ("slimkary",           "https://onlyfans.com/slimkary/c145"),
-    ("panteritaaa",        "https://onlyfans.com/panteritaaa/trial/zo6w1whexceytrfwfw6h1ooozyjkidrb"),
-    ("only-mei",           "https://onlyfans.com/only_mei/trial/txs37zalkqjk4rssautccfafngkidrp5"),
-    ("azaleahijabi",       "https://onlyfans.com/azaleahijabi/trial/5qd6oeiyrwzyls8l7uuc2hz85byglibu"),
-    ("emmilee-xx",         "https://onlyfans.com/emmilee.xx/trial/9t1i2mntfpftkuchct94jg5wkfxzbeb0"),
-    ("matchakeira",        "https://onlyfans.com/matchakeira/trial/1yciuersvwym7qi8c9jbkpqfhswpyr79"),
-    ("avemylissaa",        "https://onlyfans.com/avemylissaa/trial/t8vuxpmveycvjmkq3owca5hshqb7v0nh"),
-    ("wondereva",          "https://onlyfans.com/wondereva/trial/5d4zgknosnk0lmbfqbfpwy4xt4urunaa"),
-    ("tiffanybei",         "https://onlyfans.com/tiffanybei/trial/ufzlmaxsumnlvpoxxdlqio1v4q3taqzp"),
-    ("cutenbusty",         "https://onlyfans.com/cutenbusty/trial/s4ngoljde0skwykyseq8ltbctekgdooi"),
-    ("bunnymya",           "https://onlyfans.com/bunnymya/trial/aloggn408jeg85d8ise4sioyjuufcdk7"),
-    ("cindybrella",        "https://onlyfans.com/cindybrella/trial/2pe7pbtnkr1p2v8epr6ly1ic9kftm0jw"),
-    ("sasha-leee",         "https://onlyfans.com/sasha.leee/trial/m36ffxu9wfgkzazuuzyb5ag9fzqlkesm"),
-    ("desiiidesiresxoxo",  "https://onlyfans.com/desiiidesiresxoxo/trial/imaahqh7bj5v2jlny6cj1gcbq057yu1s"),
-    ("adalyn-diary",       "https://onlyfans.com/adalyn.diary/trial/eruzckdvatp83qabccwo3ucmgz0nipv4"),
-    ("curvy-kate-lv",      "https://onlyfans.com/curvy_kate_lv/trial/dqeiu2f2uiv144l8udvoxwie8lu7vwsk"),
-    ("miraclevoyage",      "https://onlyfans.com/miraclevoyage/trial/ejdvrbbzhmymuvyz9ytjyu3caak6rq8q"),
-    ("yukixbunz",          "https://onlyfans.com/yukixbunz/trial/fplzvseccs21cztl6anlpzf0k0ric6nf"),
-    ("bbwdalia",           "https://onlyfans.com/bbwdalia/trial/rxwzymeezcl7vfqkaroxqcojkyowfiv4"),
-    ("nathasly",           "https://onlyfans.com/nathasly/c142"),
-    ("itsemmawilsonn",     "https://onlyfans.com/itsemmawilsonn/c207"),
-    ("nayashka",           "https://onlyfans.com/nayashka/c29"),
-    ("nerdyyumi",          "https://onlyfans.com/nerdyyumi/trial/5tnikbkcrun4ti0k6y5b63mcpj4tls4g"),
-    ("lizzy-vixxen",       "https://onlyfans.com/lizzy_vixxen/trial/dziftnnd7mipdmhmrmtu6f0tgx5xp3tq"),
-    ("hijabisofiya",       "https://onlyfans.com/hijabisofiya/trial/xsu2etgswsfyefkjbpolp7vtcey3crxm"),
-    ("lenadrains",         "https://onlyfans.com/lenadrains/c162"),
-    ("leonayla",           "https://onlyfans.com/leonayla/trial/xofiuyrxc8qtcybjdhscz1i7iwiiaaqd"),
-    ("aryastark2024",      "https://onlyfans.com/aryastark2024/trial/klmvadpjkgaaqejcqjdqh2sorjn1absy"),
-    ("lris-adamsone",      "https://onlyfans.com/lris_adamsone/trial/o1gnpth1skdws5ilywo5fplj5jtyopmx"),
-    ("callysto-nymph",     "https://onlyfans.com/callysto_nymph/trial/nvm5nblltdjificlx5loq3mh3zza8wad"),
-    ("sweetteonly",        "https://onlyfans.com/sweetteonly/trial/fczpzmn7wtfdmdkik86ueq65aupggxbw"),
-    ("bunnyholez",         "https://onlyfans.com/bunnyholez/trial/xcqew99hpbxncx4v42mpeeinu41idunk"),
-    ("gina-a",             "https://onlyfans.com/gina_a/trial/coq6pzex8l0txort8h08azddjilurzvs"),
-    ("yumi-neko",          "https://onlyfans.com/yumi_neko/trial/d3oyijd1ealmio035dig3gfoulo5pxaa"),
-    ("peeeachypie",        "https://onlyfans.com/peeeachypie/trial/eqit8wsyy5xafsw9nhhel5ffwdl2vuts"),
-    ("tureinafire",        "https://onlyfans.com/tureinafire/trial/qui5kcyamxxcaenegrynpqkcepawsvbv"),
-    ("esteladior",         "https://onlyfans.com/esteladior/c664"),
-    ("rosedomi",           "https://onlyfans.com/rosedomi/trial/lwv21q2luc9qla8seawyxlpxdlv2x4dh"),
-    ("xprincessnx",        "https://onlyfans.com/xprincessnx/trial/2d60smotandzadtgbzo7kektch8it9x1"),
-    ("aurora-shadow",      "https://onlyfans.com/aurora_shadow/c26"),
-    ("lilthiccckk",        "https://onlyfans.com/lilthiccckk/trial/x5no7rhwclmyprbln7pwn845rqzor79u"),
-    ("your-tasha",         "https://onlyfans.com/your.tasha/trial/ct1o1g1smcqyngk6ul9ikd34ce8ocpew"),
-    ("ambersplayland",     "https://onlyfans.com/ambersplayland/trial/of98c3bocr1grtkaglibm2kgwfgpn9yg"),
-    ("emillia3",           "https://onlyfans.com/emillia3/c73"),
-    ("lachicarocio",       "https://onlyfans.com/lachicarocio/c31"),
-    ("softyasmin",         "https://onlyfans.com/softyasmin/trial/yn1na8f4ldec2lbjykqicpomovlxn17x"),
-    ("sya",                "https://onlyfans.com/action/trial/h0habqtcqxyjgdmej2ivfakgtbanrzhk"),
-    ("quincysin1",         "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
-    ("luna-dray",          "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
-    ("nikkita-ts",         "https://onlyfans.com/nikkita.ts/c52"),
-    ("littlefoxira",       "https://onlyfans.com/littlefoxira/trial/kgnqmez8dgqmb3tzowmnw5bbzle6azya"),
-    ("little-jane",        "https://onlyfans.com/little_jane/c40"),
+    ("sya",                   "https://onlyfans.com/action/trial/h0habqtcqxyjgdmej2ivfakgtbanrzhk"),
+    ("bbwdalia",              "https://onlyfans.com/bbwdalia/trial/rxwzymeezcl7vfqkaroxqcojkyowfiv4"),
+    ("hijabisofiya",          "https://onlyfans.com/hijabisofiya/trial/xsu2etgswsfyefkjbpolp7vtcey3crxm"),
+    ("cindybrella",           "https://onlyfans.com/cindybrella/trial/qrihxutl9plil2y13ssyadorzvrddvnz"),
+    ("softyasmin",            "https://onlyfans.com/softyasmin/trial/yn1na8f4ldec2lbjykqicpomovlxn17x"),
+    ("lilthiccckk",           "https://onlyfans.com/lilthiccckk/trial/x5no7rhwclmyprbln7pwn845rqzor79u"),
+    ("yukixbunz",             "https://onlyfans.com/yukixbunz/trial/fplzvseccs21cztl6anlpzf0k0ric6nf"),
+    ("matchakeira",           "https://onlyfans.com/matchakeira/trial/1yciuersvwym7qi8c9jbkpqfhswpyr79"),
+    ("tiffanybei",            "https://onlyfans.com/tiffanybei/trial/ufzlmaxsumnlvpoxxdlqio1v4q3taqzp"),
+    ("desiiidesiresxoxo",     "https://onlyfans.com/desiiidesiresxoxo/trial/imaahqh7bj5v2jlny6cj1gcbq057yu1s"),
+    ("nerdyyumi",             "https://onlyfans.com/nerdyyumi/trial/5tnikbkcrun4ti0k6y5b63mcpj4tls4g"),
+    ("slimkary",              "https://onlyfans.com/slimkary/c145"),
+    ("only-mei",              "https://onlyfans.com/only_mei/trial/txs37zalkqjk4rssautccfafngkidrp5"),
+    ("bunnymya",              "https://onlyfans.com/bunnymya/trial/aloggn408jeg85d8ise4sioyjuufcdk7"),
+    ("callysto-nymph",        "https://onlyfans.com/callysto_nymph/trial/nvm5nblltdjificlx5loq3mh3zza8wad"),
+    ("goodgirlhana",          "https://onlyfans.com/goodgirlhana/trial/98x1xaq09yo46pubcbtvd1urmaftc2cr"),
+    ("miraclevoyage",         "https://onlyfans.com/miraclevoyage/trial/ejdvrbbzhmymuvyz9ytjyu3caak6rq8q"),
+    ("bunnyholez",            "https://onlyfans.com/bunnyholez/trial/xcqew99hpbxncx4v42mpeeinu41idunk"),
+    ("aurora-shadow",         "https://onlyfans.com/aurora_shadow/c26"),
+    ("curvy-kate-lv",         "https://onlyfans.com/curvy_kate_lv/trial/dqeiu2f2uiv144l8udvoxwie8lu7vwsk"),
+    ("nayashka",              "https://onlyfans.com/nayashka/c29"),
+    ("sunny-bunny-xx",        "https://onlyfans.com/sunny.bunny.xx/trial/7ylsomutjw1nxfywiiupgi7nzjinwfip"),
+    ("wondereva",             "https://onlyfans.com/wondereva/trial/5d4zgknosnk0lmbfqbfpwy4xt4urunaa"),
+    ("lizzy-vixxen",          "https://onlyfans.com/lizzy_vixxen/trial/dziftnnd7mipdmhmrmtu6f0tgx5xp3tq"),
+    ("panteritaaa",           "https://onlyfans.com/panteritaaa/trial/zo6w1whexceytrfwfw6h1ooozyjkidrb"),
+    ("gina-a",                "https://onlyfans.com/gina_a/trial/coq6pzex8l0txort8h08azddjilurzvs"),
+    ("emmilee-xx",            "https://onlyfans.com/emmilee.xx/trial/9t1i2mntfpftkuchct94jg5wkfxzbeb0"),
+    ("rosedomi",              "https://onlyfans.com/rosedomi/trial/lwv21q2luc9qla8seawyxlpxdlv2x4dh"),
+    ("ambersplayland",        "https://onlyfans.com/ambersplayland/trial/of98c3bocr1grtkaglibm2kgwfgpn9yg"),
+    ("cutenbusty",            "https://onlyfans.com/cutenbusty/trial/s4ngoljde0skwykyseq8ltbctekgdooi"),
+    ("nathasly",              "https://onlyfans.com/nathasly/c142"),
+    ("sweetteonly",           "https://onlyfans.com/sweetteonly/trial/fczpzmn7wtfdmdkik86ueq65aupggxbw"),
+    ("azaleahijabi",          "https://onlyfans.com/azaleahijabi/trial/5qd6oeiyrwzyls8l7uuc2hz85byglibu"),
+    ("sasha-leee",            "https://onlyfans.com/sasha.leee/trial/m36ffxu9wfgkzazuuzyb5ag9fzqlkesm"),
+    ("your-tasha",            "https://onlyfans.com/your.tasha/trial/ct1o1g1smcqyngk6ul9ikd34ce8ocpew"),
+    ("avemylissaa",           "https://onlyfans.com/avemylissaa/trial/t8vuxpmveycvjmkq3owca5hshqb7v0nh"),
+    ("panteritaaa",           "https://onlyfans.com/panteritaaa/c20"),
+    ("callysto-nymph",        "https://onlyfans.com/callysto_nymph/trial/c2gdchg7h1cs1dml1b1lqvdi9mqpcbpg"),
+    ("monica-de-mistress",    "https://onlyfans.com/monica_de_mistress/trial/iqq6lgdsoa1qaietvreotxhduhgvnqzx"),
+    ("xprincessnx",           "https://onlyfans.com/xprincessnx/trial/2d60smotandzadtgbzo7kektch8it9x1"),
+    ("aryastark2024",         "https://onlyfans.com/aryastark2024/trial/klmvadpjkgaaqejcqjdqh2sorjn1absy"),
+    ("leonayla",              "https://onlyfans.com/leonayla/trial/xofiuyrxc8qtcybjdhscz1i7iwiiaaqd"),
+    ("sasha-leee",            "https://onlyfans.com/sasha.leee/trial/ert3hh3h4z7deu921qnxd1oyqqr5ru6r"),
+    ("itsemmawilsonn",        "https://onlyfans.com/itsemmawilsonn/c207"),
+    ("lenadrains",            "https://onlyfans.com/lenadrains/c162"),
+    ("esteladior",            "https://onlyfans.com/esteladior/c664"),
+    ("yumi-neko",             "https://onlyfans.com/yumi_neko/trial/d3oyijd1ealmio035dig3gfoulo5pxaa"),
+    ("lris-adamsone",         "https://onlyfans.com/lris_adamsone/trial/o1gnpth1skdws5ilywo5fplj5jtyopmx"),
+    ("peeeachypie",           "https://onlyfans.com/peeeachypie/trial/eqit8wsyy5xafsw9nhhel5ffwdl2vuts"),
+    ("adalyn-diary",          "https://onlyfans.com/adalyn.diary/trial/eruzckdvatp83qabccwo3ucmgz0nipv4"),
+    ("tureinafire",           "https://onlyfans.com/tureinafire/trial/qui5kcyamxxcaenegrynpqkcepawsvbv"),
+    ("emillia3",              "https://onlyfans.com/emillia3/c73"),
+    ("lachicarocio",          "https://onlyfans.com/lachicarocio/c31"),
+    ("quincysin1",            "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
+    ("luna-dray",             "https://onlyfans.com/luna_dray/trial/5goefsddh7xwavm9yzilwkgzxdnihkk2"),
+    ("nikkita-ts",            "https://onlyfans.com/nikkita.ts/c52"),
+    ("littlefoxira",          "https://onlyfans.com/littlefoxira/trial/kgnqmez8dgqmb3tzowmnw5bbzle6azya"),
+    ("panteritaaa",           "https://onlyfans.com/panteritaaa/trial/jquf7gdghpqirskyjvljcr2f74hbmpek"),
+    ("callysto-nymph",        "https://onlyfans.com/celine_noir/trial/y8fukfceq5yzspvub6aizzcwlsiounvw"),
+    ("cindybrella",           "https://onlyfans.com/cindybrella/trial/2pe7pbtnkr1p2v8epr6ly1ic9kftm0jw"),
+    ("little-jane",           "https://onlyfans.com/little_jane/c40"),
 ]
 
 
@@ -1200,13 +1206,15 @@ def _auto_enabled() -> bool:
 def _get_own_archive_entries() -> list[dict]:
     """Return archive entries for KB's own content (non-GG, caption present, file exists).
 
-    Excludes any entry whose file_path contains '/GG/' so GG promo posts are
-    never double-counted here.  Also excludes entries whose local file no longer
-    exists on disk.
+    Filters by post_type (canonical) and also by /GG/ path substring as a guard —
+    many GG entries have file_path pointing to ~/Desktop/kinkyfreefux/videos/ which
+    does NOT contain '/GG/', so the path-only check used to leak girl-content into
+    the free-post slot (with the kinkybeatricevip suffix). Always check post_type.
     """
     return [
         e for e in _load_archive()
         if e.get("file_path")
+        and e.get("post_type") != "gg"
         and "/GG/" not in e["file_path"]
         and e.get("caption")
         and Path(e["file_path"]).exists()
@@ -1585,50 +1593,89 @@ async def job_ppv_post(context: ContextTypes.DEFAULT_TYPE) -> None:
 # Job: daily R2 cleanup (runs once a day)
 # ---------------------------------------------------------------------------
 
-async def job_r2_cleanup(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Delete R2 objects for content that was posted >7 days ago with no purchases.
+def _row_get(row, key: str, default=None):
+    """Safe column accessor for sqlite3.Row (which lacks .get())."""
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
 
-    Thumbnails stored under my-content/thumbs/ are also deleted when the parent
-    content row is cleaned up.
+
+async def _run_r2_cleanup(days: int = 7) -> tuple[int, int, int]:
+    """Drain stale R2 objects + mark DB rows as R2-cleaned.
+
+    Returns:
+        (rows_processed, objects_deleted, errors)
     """
-    stale = db.get_stale_content_for_cleanup(days=7)
-    deleted = 0
+    stale = db.get_stale_content_for_cleanup(days=days)
+    rows_processed = 0
+    objects_deleted = 0
+    errors = 0
+
     for row in stale:
-        url = row["file_url"] or ""
-        if not url:
-            continue
-        # Derive R2 object key from the public URL: last two path segments (folder/file)
-        parts = [p for p in url.split("/") if p]
-        if len(parts) >= 2:
-            object_key = f"{parts[-2]}/{parts[-1]}"
-        else:
-            object_key = parts[-1] if parts else ""
-        if not object_key:
-            continue
+        rows_processed += 1
         try:
-            await asyncio.to_thread(r2.delete_file, object_key)
-            logger.info("R2 cleanup: deleted %s", object_key)
-            deleted += 1
-        except Exception as exc:
-            logger.warning("R2 cleanup: could not delete %s: %s", object_key, exc)
-
-        # Delete thumbnail if present
-        teaser_url = row.get("teaser_url") or ""
-        if teaser_url:
-            t_parts = [p for p in teaser_url.split("/") if p]
-            if len(t_parts) >= 3:
-                thumb_key = f"{t_parts[-3]}/{t_parts[-2]}/{t_parts[-1]}"
-            elif len(t_parts) >= 2:
-                thumb_key = f"{t_parts[-2]}/{t_parts[-1]}"
+            content_id = row["id"]
+            url = row["file_url"] or ""
+            if not url:
+                continue
+            parts = [p for p in url.split("/") if p]
+            if len(parts) >= 2:
+                object_key = f"{parts[-2]}/{parts[-1]}"
             else:
-                thumb_key = ""
-            if thumb_key:
-                try:
-                    await asyncio.to_thread(r2.delete_file, thumb_key)
-                except Exception:
-                    pass
+                object_key = parts[-1] if parts else ""
 
-    logger.info("R2 cleanup complete: %d objects deleted", deleted)
+            # Delete main file from R2
+            if object_key:
+                try:
+                    await asyncio.to_thread(r2.delete_file, object_key)
+                    objects_deleted += 1
+                except Exception as exc:
+                    logger.warning("R2 cleanup: could not delete %s: %s", object_key, exc)
+                    errors += 1
+
+            # Delete teaser/thumbnail if present
+            teaser_url = _row_get(row, "teaser_url") or ""
+            if teaser_url:
+                t_parts = [p for p in teaser_url.split("/") if p]
+                if len(t_parts) >= 3:
+                    thumb_key = f"{t_parts[-3]}/{t_parts[-2]}/{t_parts[-1]}"
+                elif len(t_parts) >= 2:
+                    thumb_key = f"{t_parts[-2]}/{t_parts[-1]}"
+                else:
+                    thumb_key = ""
+                if thumb_key:
+                    try:
+                        await asyncio.to_thread(r2.delete_file, thumb_key)
+                        objects_deleted += 1
+                    except Exception:
+                        pass  # teaser miss is non-fatal
+
+            # Mark DB row as R2-cleaned so the next cleanup run won't reprocess it
+            try:
+                db.mark_r2_cleaned(content_id)
+            except Exception as exc:
+                logger.warning("R2 cleanup: could not mark content_id=%s cleaned: %s",
+                               content_id, exc)
+                errors += 1
+        except Exception as exc:
+            errors += 1
+            logger.warning("R2 cleanup: row error: %s", exc, exc_info=True)
+            continue
+
+    return rows_processed, objects_deleted, errors
+
+
+async def job_r2_cleanup(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Daily R2 cleanup job — drains stale objects + marks rows R2-cleaned."""
+    try:
+        rows, deleted, errors = await _run_r2_cleanup(days=7)
+        logger.info(
+            "R2 cleanup complete: %d rows processed, %d objects deleted, %d errors",
+            rows, deleted, errors,
+        )
+    except Exception as exc:
+        logger.error("R2 cleanup job failed: %s", exc, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1791,6 +1838,38 @@ async def cmd_setppvprice(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(f"✅ Default PPV price set to {price} ⭐.")
 
 
+async def cmd_cleanup_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /cleanup_now [days] — manually trigger R2 cleanup.
+
+    Drains all content rows older than [days] (default 7) that have no
+    purchases. Useful for backfilling after the cleanup job was broken,
+    or for one-shot maintenance.
+    """
+    if not _is_owner(update):
+        await update.message.reply_text("Not authorised.")
+        return
+
+    days = 7
+    if context.args and context.args[0].isdigit():
+        days = max(1, min(365, int(context.args[0])))
+
+    await update.message.reply_text(f"🧹 Starting R2 cleanup for content >{days} days old…")
+    try:
+        rows, deleted, errors = await _run_r2_cleanup(days=days)
+        await update.message.reply_text(
+            f"✅ Cleanup complete\n"
+            f"• Rows processed: {rows}\n"
+            f"• R2 objects deleted: {deleted}\n"
+            f"• Errors: {errors}"
+        )
+        logger.info(
+            "Manual cleanup: %d rows, %d deleted, %d errors", rows, deleted, errors
+        )
+    except Exception as exc:
+        logger.error("Manual cleanup failed: %s", exc, exc_info=True)
+        await update.message.reply_text(f"❌ Cleanup failed: {exc}")
+
+
 # ---------------------------------------------------------------------------
 # Application setup
 # ---------------------------------------------------------------------------
@@ -1814,6 +1893,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("autostop",    cmd_autostop))
     app.add_handler(CommandHandler("autostatus",  cmd_autostatus))
     app.add_handler(CommandHandler("setppvprice", cmd_setppvprice))
+    app.add_handler(CommandHandler("cleanup_now", cmd_cleanup_now))
 
     # Inline button & payments
     app.add_handler(CallbackQueryHandler(handle_ppv_button, pattern=r"^ppv:\d+$"))
