@@ -6,6 +6,14 @@ cd "$(dirname "$0")"
 
 source venv/bin/activate
 
+# Kill any existing bot/watcher processes before starting fresh
+EXISTING=$(pgrep -f "bot.py|watcher.py" 2>/dev/null)
+if [ -n "$EXISTING" ]; then
+    echo "🛑 Stopping existing processes: $EXISTING"
+    echo "$EXISTING" | xargs kill 2>/dev/null
+    sleep 1
+fi
+
 echo "🤖 Starting watcher and bot..."
 echo ""
 
