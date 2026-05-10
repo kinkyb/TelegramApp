@@ -151,7 +151,6 @@ GG_CREATORS = [
     ("lris-adamsone",         "https://onlyfans.com/lris_adamsone/trial/o1gnpth1skdws5ilywo5fplj5jtyopmx"),
     ("peeeachypie",           "https://onlyfans.com/peeeachypie/trial/eqit8wsyy5xafsw9nhhel5ffwdl2vuts"),
     ("adalyn-diary",          "https://onlyfans.com/adalyn.diary/trial/eruzckdvatp83qabccwo3ucmgz0nipv4"),
-    ("tureinafire",           "https://onlyfans.com/tureinafire/trial/qui5kcyamxxcaenegrynpqkcepawsvbv"),
     ("emillia3",              "https://onlyfans.com/emillia3/c73"),
     ("lachicarocio",          "https://onlyfans.com/lachicarocio/c31"),
     ("quincysin1",            "https://onlyfans.com/quincysin1/trial/kqpa6zi6x27tire7ov5sokjdv82k2bmw"),
