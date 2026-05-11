@@ -89,7 +89,7 @@ AUTO_JOB_NAMES    = ["auto_free", "auto_promo_1", "auto_ppv", "auto_promo_2"]
 GROK_API_KEY      = os.getenv("GROK_API_KEY", "")
 GROK_API_URL      = "https://api.x.ai/v1/chat/completions"
 VIP_LOUNGE_URL    = "https://onlyfans.com/kinkybeatricevip"
-FREE_POST_SUFFIX  = "For paid fucks without other girls sub to Kinky Beatrice No Promo Lounge at https://onlyfans.com/kinkybeatricevip/c15"
+VIP_LOUNGE_SUFFIX = "💋 To get a 3-month access to my OnlyFans VIP No Promo Lounge https://onlyfans.com/kinkybeatricevip/c15 for FREE go to kinkyfreefux.com and follow instructions 💋"
 DEFAULT_PPV_PRICE = int(os.getenv("DEFAULT_PPV_PRICE", "1000"))
 
 XAUTOPOST_ARCHIVE = Path.home() / "Desktop" / "XAutoPosting" / "posted_archive.json"
@@ -1247,9 +1247,9 @@ async def job_free_post(context: ContextTypes.DEFAULT_TYPE) -> None:
     file_path = Path(entry["file_path"])
     caption   = _clean_x_caption(entry["caption"])
     if caption:
-        caption = f"{caption}\n\n{FREE_POST_SUFFIX}"
+        caption = f"{caption}\n\n{VIP_LOUNGE_SUFFIX}"
     else:
-        caption = FREE_POST_SUFFIX
+        caption = VIP_LOUNGE_SUFFIX
     source    = str(file_path)
 
     # Determine file type
@@ -1400,7 +1400,7 @@ async def job_promo_girl(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not caption:
         caption = f"✨ {display_name} is waiting for you on OnlyFans!"
 
-    full_caption = f"{caption}\n💋 {trial_link} 💋"
+    full_caption = f"{caption}\n💋 {trial_link} 💋\n\n{VIP_LOUNGE_SUFFIX}"
 
     # Find and (if needed) upload the creator's GIF to R2
     # GIFs > 50 MB are converted to MP4 first so Telegram can receive them as bytes
@@ -1568,7 +1568,7 @@ async def job_ppv_post(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not teaser_text:
         teaser_text = "Exclusive content — this one is absolutely filthy 🔥 unlock & enjoy"
 
-    full_caption = f"💋 {teaser_text} 💋"
+    full_caption = f"💋 {teaser_text} 💋\n\n{VIP_LOUNGE_SUFFIX}"
 
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton(
