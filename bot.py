@@ -119,7 +119,6 @@ GG_CREATORS = [
     ("callysto-nymph",        "https://onlyfans.com/callysto_nymph/trial/nvm5nblltdjificlx5loq3mh3zza8wad"),
     ("goodgirlhana",          "https://onlyfans.com/goodgirlhana/trial/98x1xaq09yo46pubcbtvd1urmaftc2cr"),
     ("miraclevoyage",         "https://onlyfans.com/miraclevoyage/trial/ejdvrbbzhmymuvyz9ytjyu3caak6rq8q"),
-    ("bunnyholez",            "https://onlyfans.com/bunnyholez/trial/xcqew99hpbxncx4v42mpeeinu41idunk"),
     ("aurora-shadow",         "https://onlyfans.com/aurora_shadow/c26"),
     ("curvy-kate-lv",         "https://onlyfans.com/curvy_kate_lv/trial/dqeiu2f2uiv144l8udvoxwie8lu7vwsk"),
     ("nayashka",              "https://onlyfans.com/nayashka/c29"),
