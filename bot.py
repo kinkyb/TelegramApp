@@ -160,6 +160,7 @@ GG_CREATORS = [
     ("callysto-nymph",        "https://onlyfans.com/celine_noir/trial/y8fukfceq5yzspvub6aizzcwlsiounvw"),
     ("cindybrella",           "https://onlyfans.com/cindybrella/trial/2pe7pbtnkr1p2v8epr6ly1ic9kftm0jw"),
     ("little-jane",           "https://onlyfans.com/little_jane/c40"),
+    ("tara-tiny",             "https://onlyfans.com/tara_tiny/trial/usvovwtnnvz12pnsorjoeh1yf4z2qmnm"),
 ]
 
 
