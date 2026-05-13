@@ -28,6 +28,8 @@ Run:  python bot.py
 
 import asyncio
 import base64
+import concurrent.futures
+import hashlib
 import json
 import logging
 import os
@@ -94,6 +96,59 @@ DEFAULT_PPV_PRICE = int(os.getenv("DEFAULT_PPV_PRICE", "1000"))
 
 XAUTOPOST_ARCHIVE = Path.home() / "Desktop" / "XAutoPosting" / "posted_archive.json"
 GG_GIFS_BASE      = Path("/Volumes/All/GG/gifs")
+GG_POOL_EXTS      = {".gif", ".jpg", ".jpeg", ".png", ".mp4"}
+
+
+def _scan_gg_pool(slug: str, timeout: float = 10.0) -> list[Path]:
+    """Return sorted list of media files for a GG creator, recursively.
+
+    Mirrors OFGG's hang-protected scan pattern — the `/Volumes/All` mount is
+    a network/external volume and can stall; running the walk on the event
+    loop would freeze the whole bot.
+    """
+    folder = GG_GIFS_BASE / slug
+
+    def _scan() -> list[Path]:
+        if not folder.is_dir():
+            return []
+        return sorted(
+            f for f in folder.rglob("*")
+            if f.is_file()
+            and f.suffix.lower() in GG_POOL_EXTS
+            and not f.name.startswith("._")
+        )
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future   = executor.submit(_scan)
+    try:
+        result = future.result(timeout=timeout)
+        executor.shutdown(wait=False)
+        return result
+    except concurrent.futures.TimeoutError:
+        executor.shutdown(wait=False)
+        return []
+    except Exception:
+        executor.shutdown(wait=False)
+        return []
+
+
+def _gg_pool_r2_key(slug: str, media_path: Path, ext_override: str | None = None) -> str:
+    """Build a cache-stable R2 key for a pool file.
+
+    Hash of the relative-to-slug path keeps the key:
+      - filename-collision proof across subfolders
+      - free of URL-unsafe characters (`@`, spaces) that would break public URLs
+      - deterministic so repeat picks of the same file hit the R2 cache
+    """
+    try:
+        rel = media_path.relative_to(GG_GIFS_BASE / slug)
+    except ValueError:
+        rel = Path(media_path.name)
+    digest = hashlib.md5(str(rel).encode("utf-8")).hexdigest()[:12]
+    ext    = (ext_override or media_path.suffix).lower()
+    return f"promo-gifs/{slug}/{digest}{ext}"
+
+
 PPV_VIDEO_DIRS    = [
     Path("/Volumes/All/Videos/0-1 min"),
     Path("/Volumes/All/Videos/1-5 min"),
@@ -159,8 +214,8 @@ GG_CREATORS = [
     ("panteritaaa",           "https://onlyfans.com/panteritaaa/trial/jquf7gdghpqirskyjvljcr2f74hbmpek"),
     ("callysto-nymph",        "https://onlyfans.com/celine_noir/trial/y8fukfceq5yzspvub6aizzcwlsiounvw"),
     ("cindybrella",           "https://onlyfans.com/cindybrella/trial/2pe7pbtnkr1p2v8epr6ly1ic9kftm0jw"),
-    ("little-jane",           "https://onlyfans.com/little_jane/c40"),
     ("tara-tiny",             "https://onlyfans.com/tara_tiny/trial/usvovwtnnvz12pnsorjoeh1yf4z2qmnm"),
+    ("eliirom25",             "https://onlyfans.com/eliirom25/trial/avnugwjvamp4mt9wi2asxwdqojovjnfs"),
 ]
 
 
@@ -1402,56 +1457,73 @@ async def job_promo_girl(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     full_caption = f"{caption}\n💋 {trial_link} 💋\n\n{VIP_LOUNGE_SUFFIX}"
 
-    # Find and (if needed) upload the creator's GIF to R2
-    # GIFs > 50 MB are converted to MP4 first so Telegram can receive them as bytes
+    # ── Resolve media from recursive pool ────────────────────────────────────
+    # Pool = every media file under /Volumes/All/GG/gifs/{slug}/ (recursive).
+    # A per-slug rotating index (`gg_media_index_{slug}`) walks the pool one
+    # file per fire so a creator with many slots/fires shows varied media
+    # instead of the same single `{slug}.gif` every time.
+    pool = await asyncio.to_thread(_scan_gg_pool, slug)
+    if not pool:
+        logger.info("Auto promo: empty pool for %s under %s — rolling back creator_index",
+                    slug, GG_GIFS_BASE / slug)
+        db.set_config("gg_creator_index", str(idx))
+        return
+
+    media_key   = f"gg_media_index_{slug}"
+    media_idx   = int(db.get_config(media_key, "0")) % len(pool)
+    gif_local   = pool[media_idx]
+    # Advance immediately — mirrors OFGG's pattern so a failed slot still moves
+    # the pointer forward (we won't re-pick the same broken file on retry).
+    db.set_config(media_key, str((media_idx + 1) % len(pool)))
+    logger.info("Auto promo: %s media %d/%d → %s",
+                slug, media_idx + 1, len(pool), gif_local.name)
+
+    # Find and (if needed) upload the creator's GIF to R2.
+    # GIFs > 50 MB are converted to MP4 first so Telegram can receive them.
     gif_url  = ""
     gif_type = "gif"
-    gif_local = GG_GIFS_BASE / slug / f"{slug}.gif"
-    if gif_local.exists():
-        upload_path = gif_local
-        r2_key      = f"promo-gifs/{slug}/{slug}.gif"
-        tmp_mp4: Path | None = None
+    upload_path = gif_local
+    r2_key      = _gg_pool_r2_key(slug, gif_local)
+    tmp_mp4: Path | None = None
 
-        if gif_local.stat().st_size > TELEGRAM_UPLOAD_LIMIT:
-            logger.info("Auto promo: GIF for %s is %.1f MB — converting to MP4",
-                        slug, gif_local.stat().st_size / 1024 / 1024)
-            def _gif_to_mp4(src: Path) -> Path | None:
-                tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
-                tmp.close()
-                res = subprocess.run(
-                    ["ffmpeg", "-y", "-i", str(src),
-                     "-movflags", "faststart", "-pix_fmt", "yuv420p",
-                     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                     tmp.name],
-                    capture_output=True, timeout=300,
-                )
-                if res.returncode != 0:
-                    Path(tmp.name).unlink(missing_ok=True)
-                    return None
-                return Path(tmp.name)
+    if gif_local.suffix.lower() == ".gif" and gif_local.stat().st_size > TELEGRAM_UPLOAD_LIMIT:
+        logger.info("Auto promo: GIF for %s is %.1f MB — converting to MP4",
+                    slug, gif_local.stat().st_size / 1024 / 1024)
+        def _gif_to_mp4(src: Path) -> Path | None:
+            tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+            tmp.close()
+            res = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(src),
+                 "-movflags", "faststart", "-pix_fmt", "yuv420p",
+                 "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                 tmp.name],
+                capture_output=True, timeout=300,
+            )
+            if res.returncode != 0:
+                Path(tmp.name).unlink(missing_ok=True)
+                return None
+            return Path(tmp.name)
 
-            tmp_mp4 = await asyncio.to_thread(_gif_to_mp4, gif_local)
-            if tmp_mp4:
-                upload_path = tmp_mp4
-                r2_key      = f"promo-gifs/{slug}/{slug}.mp4"
-                gif_type    = "gif"   # sendAnimation handles MP4 fine
+        tmp_mp4 = await asyncio.to_thread(_gif_to_mp4, gif_local)
+        if tmp_mp4:
+            upload_path = tmp_mp4
+            r2_key      = _gg_pool_r2_key(slug, gif_local, ext_override=".mp4")
+            gif_type    = "gif"   # sendAnimation handles MP4 fine
 
-        local_send_path: Path | None = None
-        try:
-            if r2.object_exists(r2_key):
-                gif_url = r2.public_url(r2_key)
-            else:
-                gif_url = await asyncio.to_thread(r2.upload_file, str(upload_path), r2_key)
-                logger.info("Auto promo: uploaded %s for %s to R2 (%.1f MB)",
-                            upload_path.suffix, slug, upload_path.stat().st_size / 1024 / 1024)
-        except Exception as exc:
-            logger.warning("Auto promo: R2 upload failed for %s: %s — sending directly", slug, exc)
-            local_send_path = upload_path  # bypass R2, send local bytes
-        finally:
-            if tmp_mp4 and gif_url:
-                tmp_mp4.unlink(missing_ok=True)
-    else:
-        logger.info("Auto promo: no GIF found for %s at %s", slug, gif_local)
+    local_send_path: Path | None = None
+    try:
+        if r2.object_exists(r2_key):
+            gif_url = r2.public_url(r2_key)
+        else:
+            gif_url = await asyncio.to_thread(r2.upload_file, str(upload_path), r2_key)
+            logger.info("Auto promo: uploaded %s for %s to R2 (%.1f MB)",
+                        upload_path.suffix, slug, upload_path.stat().st_size / 1024 / 1024)
+    except Exception as exc:
+        logger.warning("Auto promo: R2 upload failed for %s: %s — sending directly", slug, exc)
+        local_send_path = upload_path  # bypass R2, send local bytes
+    finally:
+        if tmp_mp4 and gif_url:
+            tmp_mp4.unlink(missing_ok=True)
 
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("💋 Visit OnlyFans (free trial)", url=trial_link)
