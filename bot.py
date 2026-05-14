@@ -88,6 +88,48 @@ OWNER_IDS: set[int] = {
 SLOT_GAP_SECONDS  = int(os.getenv("SLOT_GAP_SECONDS", "900"))
 AUTO_JOB_NAMES    = ["auto_free", "auto_promo_1", "auto_ppv", "auto_promo_2"]
 
+# Wall-clock anchors for the 4 production slots (used only when
+# cycle == 3600 s, i.e. SLOT_GAP_SECONDS == 900 = the prod default).
+# Chosen to keep TG entirely out of the :00 and :30 minutes where the OF
+# stack and VIP stack already cluster — fills the previously-idle :40 and
+# :55 minutes. Mapping: auto_free :10, auto_promo_1 :25, auto_ppv :40,
+# auto_promo_2 :55.
+SLOT_MINUTE_FREE    = 10
+SLOT_MINUTE_PROMO_1 = 25
+SLOT_MINUTE_PPV     = 40
+SLOT_MINUTE_PROMO_2 = 55
+
+
+def _seconds_until_minute(target_minute: int) -> float:
+    """Seconds from now until the next wall-clock occurrence of HH:target_minute:02 (local time).
+
+    Used to anchor PTB run_repeating jobs to a clock grid instead of bot
+    start time — without this, every restart slides the 4-slot schedule.
+    """
+    now = datetime.now()
+    target = now.replace(minute=target_minute, second=2, microsecond=0)
+    if target <= now:
+        target += timedelta(hours=1)
+    return (target - now).total_seconds()
+
+
+def _slot_first_offsets(gap: int, cycle: int) -> tuple[float, float, float, float]:
+    """Return (first_free, first_promo_1, first_ppv, first_promo_2) offsets in seconds.
+
+    For the production 1-hour cycle (cycle == 3600 s) we anchor each slot to
+    its wall-clock minute so restarts don't slide the schedule. For test
+    cycles (e.g. SLOT_GAP_SECONDS=15 → cycle=60 s) we fall back to the old
+    relative offsets so fast-cycle local testing still works.
+    """
+    if cycle == 3600:
+        return (
+            _seconds_until_minute(SLOT_MINUTE_FREE),
+            _seconds_until_minute(SLOT_MINUTE_PROMO_1),
+            _seconds_until_minute(SLOT_MINUTE_PPV),
+            _seconds_until_minute(SLOT_MINUTE_PROMO_2),
+        )
+    return (1, gap, gap * 2, gap * 3)
+
 GROK_API_KEY      = os.getenv("GROK_API_KEY", "")
 GROK_API_URL      = "https://api.x.ai/v1/chat/completions"
 VIP_LOUNGE_URL    = "https://onlyfans.com/kinkybeatricevip"
@@ -1773,18 +1815,19 @@ async def cmd_autostart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     gap   = SLOT_GAP_SECONDS
     cycle = gap * 4
+    first_free, first_promo_1, first_ppv, first_promo_2 = _slot_first_offsets(gap, cycle)
 
     context.job_queue.run_repeating(
-        job_free_post,  interval=cycle, first=1,       name="auto_free",    chat_id=0,
+        job_free_post,  interval=cycle, first=first_free,    name="auto_free",    chat_id=0,
     )
     context.job_queue.run_repeating(
-        job_promo_girl, interval=cycle, first=gap,     name="auto_promo_1", chat_id=0,
+        job_promo_girl, interval=cycle, first=first_promo_1, name="auto_promo_1", chat_id=0,
     )
     context.job_queue.run_repeating(
-        job_ppv_post,   interval=cycle, first=gap * 2, name="auto_ppv",     chat_id=0,
+        job_ppv_post,   interval=cycle, first=first_ppv,     name="auto_ppv",     chat_id=0,
     )
     context.job_queue.run_repeating(
-        job_promo_girl, interval=cycle, first=gap * 3, name="auto_promo_2", chat_id=0,
+        job_promo_girl, interval=cycle, first=first_promo_2, name="auto_promo_2", chat_id=0,
     )
 
     db.set_config("auto_enabled", "1")
@@ -2002,12 +2045,14 @@ def main() -> None:
     if db.get_config("auto_enabled", "0") == "1":
         gap   = SLOT_GAP_SECONDS
         cycle = gap * 4
-        app.job_queue.run_repeating(job_free_post,  interval=cycle, first=1,       name="auto_free",    chat_id=0)
-        app.job_queue.run_repeating(job_promo_girl, interval=cycle, first=gap,     name="auto_promo_1", chat_id=0)
-        app.job_queue.run_repeating(job_ppv_post,   interval=cycle, first=gap * 2, name="auto_ppv",     chat_id=0)
-        app.job_queue.run_repeating(job_promo_girl, interval=cycle, first=gap * 3, name="auto_promo_2", chat_id=0)
+        first_free, first_promo_1, first_ppv, first_promo_2 = _slot_first_offsets(gap, cycle)
+        app.job_queue.run_repeating(job_free_post,  interval=cycle, first=first_free,    name="auto_free",    chat_id=0)
+        app.job_queue.run_repeating(job_promo_girl, interval=cycle, first=first_promo_1, name="auto_promo_1", chat_id=0)
+        app.job_queue.run_repeating(job_ppv_post,   interval=cycle, first=first_ppv,     name="auto_ppv",     chat_id=0)
+        app.job_queue.run_repeating(job_promo_girl, interval=cycle, first=first_promo_2, name="auto_promo_2", chat_id=0)
         logger.info(
-            "Auto-scheduler restored from config (gap=%ds, cycle=%ds).", gap, cycle
+            "Auto-scheduler restored from config (gap=%ds, cycle=%ds, anchors :%02d/:%02d/:%02d/:%02d).",
+            gap, cycle, SLOT_MINUTE_FREE, SLOT_MINUTE_PROMO_1, SLOT_MINUTE_PPV, SLOT_MINUTE_PROMO_2
         )
 
     logger.info("Bot starting (polling)…")

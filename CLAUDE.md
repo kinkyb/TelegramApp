@@ -34,10 +34,14 @@ If double-clicked by accident: `pgrep -f "bot.py|watcher.py" | xargs kill`
 
 | Slot | What fires | Media source | Caption source |
 |---|---|---|---|
-| :00 | Free post | `posted_archive.json` file_path (own content, non-GG) | Archive caption + VIP suffix |
-| :15 | GG promo | `/Volumes/All/GG/gifs/{slug}/{slug}.gif` | Archive matched by slug |
-| :30 | PPV video | `/Volumes/All/Videos/0-1 min/` + `1-5 min/` | Grok-4-fast rephrase of filthy template |
-| :45 | GG promo | same as :15, rotation continues | same as :15 |
+| :10 | Free post | `posted_archive.json` file_path (own content, non-GG) | Archive caption + VIP suffix |
+| :25 | GG promo | `/Volumes/All/GG/gifs/{slug}/**` (recursive pool, per-slug rotation) | Archive matched by slug |
+| :40 | PPV video | `/Volumes/All/Videos/0-1 min/` + `1-5 min/` | Grok-4-fast rephrase of filthy template |
+| :55 | GG promo | same as :25, rotation continues | same as :25 |
+
+**Wall-clock anchors** (changed 2026-05-14, was `:00/:15/:30/:45` and drifting): each slot is independently anchored to a wall-clock minute via `_seconds_until_minute()` at [bot.py:91](bot.py:91), so restarts no longer slide the schedule. The 4 minutes `:10/:25/:40/:55` were chosen to keep TG entirely off the heavily-clustered `:00` and `:30` minutes (where the OF stack and VIP stack already pile up) and fill the previously-idle `:40` and `:55` minutes. Only applies when `cycle == 3600` (production); test cycles (`SLOT_GAP_SECONDS=15` → 60 s cycle) fall back to relative offsets so fast-cycle local testing still works. Both `cmd_autostart` and the `main()` restore block use `_slot_first_offsets(gap, cycle)` to compute `first=` values.
+
+**GG promo media pool** (since 2026-05-13): `_scan_gg_pool(slug)` at [bot.py:102](bot.py:102) recursively walks `/Volumes/All/GG/gifs/{slug}/` for every `.gif/.jpg/.jpeg/.png/.mp4` (excluding `._*` macOS metadata), sorted. Scan runs inside a hang-protected 10s thread executor — same pattern OFGG uses — because `/Volumes/All` is a network/external mount that can stall the asyncio loop. Per-slug rotation index stored as config key `gg_media_index_{slug}` in `bot.db`, advanced one position per fire (wraps mod pool size). On empty pool the creator_index is rolled back so the same girl is retried on the next slot. R2 key is hash-based (`promo-gifs/{slug}/{md5(relpath)[:12]}{ext}`) so subfolder paths with `@`/spaces never break public URLs, and repeat picks of the same file hit the R2 cache. Pre-2026-05-13 the bot read exactly one canonical file `{slug}.gif`; that file is just one entry of many now.
 
 **Caption cache:** `~/Desktop/XAutoPosting/posted_archive.json` — shared with XAutoPosting.
 3 of 4 slots reuse archived captions (zero Grok cost). Only PPV calls Grok.
