@@ -35,9 +35,13 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+sys.path.insert(0, "/Users/mac/Desktop/lib")
+from pool_cache import scan_pool  # noqa: E402  shared cache helper
 
 from dotenv import load_dotenv
 from telegram import (
@@ -144,34 +148,12 @@ GG_POOL_EXTS      = {".gif", ".jpg", ".jpeg", ".png", ".mp4"}
 def _scan_gg_pool(slug: str, timeout: float = 10.0) -> list[Path]:
     """Return sorted list of media files for a GG creator, recursively.
 
-    Mirrors OFGG's hang-protected scan pattern — the `/Volumes/All` mount is
-    a network/external volume and can stall; running the walk on the event
-    loop would freeze the whole bot.
+    Delegates to shared pool_cache.scan_pool() — caches the listing in
+    /tmp/of_pool_cache/ keyed by (path, ext-set). OFGG uses the same key
+    so the rglob runs at most once every TTL across both workflows.
+    Falls back to stale cache on volume hangs.
     """
-    folder = GG_GIFS_BASE / slug
-
-    def _scan() -> list[Path]:
-        if not folder.is_dir():
-            return []
-        return sorted(
-            f for f in folder.rglob("*")
-            if f.is_file()
-            and f.suffix.lower() in GG_POOL_EXTS
-            and not f.name.startswith("._")
-        )
-
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future   = executor.submit(_scan)
-    try:
-        result = future.result(timeout=timeout)
-        executor.shutdown(wait=False)
-        return result
-    except concurrent.futures.TimeoutError:
-        executor.shutdown(wait=False)
-        return []
-    except Exception:
-        executor.shutdown(wait=False)
-        return []
+    return scan_pool(GG_GIFS_BASE / slug, frozenset(GG_POOL_EXTS), scan_timeout=timeout)
 
 
 def _gg_pool_r2_key(slug: str, media_path: Path, ext_override: str | None = None) -> str:
